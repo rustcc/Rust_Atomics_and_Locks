@@ -141,6 +141,6 @@
 * [序列锁](./10_Ideas_and_Inspiration.md#序列锁)
 * [教学材料](./10_Ideas_and_Inspiration.md#教学材料)
 
-注明：本文译自 <https://marabos.nl/atomics/inspiration.html#lock-free-linked-list>，弱其它平台引用此翻译，也请注明出处。
+注明：本文译自 <https://marabos.nl/atomics/inspiration.html#lock-free-linked-list>，若其它平台引用此翻译，也请注明出处。
 
 翻译进行中...
