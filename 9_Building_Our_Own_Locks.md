@@ -586,9 +586,363 @@ impl Condvar {
 
 ## 读写锁
 
+是时候实现读写锁了。
+
+回想一下，与互斥锁不同，读写锁支持两种类型的锁：读锁和写锁，有时称为共享锁定和排他性锁定。写锁的行为与锁定 mutex 相同，一次仅允许一个锁，而读锁则一次可以允许多个 reader 锁定。换句话说，它与 Rust 中的独占引用（`&mut T`）和共享引用（`&T`）密切相关，仅允许一个独占引用，或者任意数量的共享引用同时处于活动状态。
+
+对于我们的 mutex，我们仅需要去跟踪它是否是锁定的。对于我们的读写锁，然而，我们也需要去知道当前持有多少个（读）锁，以确保所有写锁释放它们的锁后才会发生写锁。
+
+让我们开始编写 `RwLock` 结构体，该结构体使用 AtomicU32 作为它的状态。我们将使用它去表示当前当前可获取的读锁数量，因此，值为 0 意味着它是未锁定的。为了表示写锁的 state，让我们使用一个特殊的值 `u32::MAX`。
+
+```rust
+pub struct RwLock<T> {
+    /// The number of readers, or u32::MAX if write-locked.
+    state: AtomicU32,
+    value: UnsafeCell<T>,
+}
+```
+
+对于我们的 `Mutex<T>`，我们必须限制它的同步实现，其类型 T 必须实现 `Send`，以确保它们不能将 `Rc` 发送到另一个线程。对于我们的新 `RwLock<T>`，我们还需要要求 T 也实现 `Sync`，因为多个 reader 将能够同时访问数据。
+
+```rust
+unsafe impl<T> Sync for Rwlock<T> where T: Send + Sync {}
+```
+
+因为我们的 RwLock 可以两种不同的方式锁定，我们将有两个单独的锁功能，每个都有属于自己的守卫：
+
+```rust
+impl<T> RwLock<T> {
+    pub const fn new(value: T) -> Self {
+        Self {
+            state: AtomicU32::new(0), // Unlocked.
+            value: UnsafeCell::new(value),
+        }
+    }
+
+    pub fn read(&self) -> ReadGuard<T> {
+        // …
+    }
+
+    pub fn write(&self) -> WriteGuard<T> {
+        // …
+    }
+}
+
+pub struct ReadGuard<'a, T> {
+    rwlock: &'a RwLock<T>,
+}
+
+pub struct WriteGuard<'a, T> {
+    rwlock: &'a RwLock<T>,
+}
+```
+
+写守卫应该表现得像一个排他性引用（`&mut T`），我们通过为它实现 `Deref` 和 `DerefMut` 来实现这一点：
+
+```rust
+impl<T> Deref for WriteGuard<'_, T> {
+    type Target = T;
+    fn deref(&self) -> &T {
+        unsafe {&*self.rwlock.value.get()}
+    }
+}
+
+impl<T> DerefMut for WriteGuard<'_, T> {
+    type Target = T;
+    fn deref_mut(&mut self) -> &T {
+        unsafe {&mut *self.rwlock.value.get()}
+    }
+}
+```
+
+然而，读守卫将仅实现 `Deref`，不用 `DerefMut`，因为它并不用独占数据的访问，这使它的行为像一个共享引用（`&T`）：
+
+```rust
+impl<T> Deref for ReadGuard<'_, T> {
+    type Target = T;
+    fn deref(&self) -> &T {
+        unsafe { &*self.rwlock.value.get() }
+    }
+}
+```
+
+既然，我们已经摆出了样板代码，那让我们谈谈有趣的部分：锁定和释放。
+
+为了读取锁定我们的 `RwLock`，我们必须将 state 递增，但是前提它必须还没有写锁定。我们将使用一个 `compare-and-exchange` 循环（[第二章“compare-and-exchange操作”](./2_Atomics.md#compare-and-exchange-操作)）去做这些。如果 state 是 `u32::MAX`，这意味着 RwLock 是写锁，我们将使用一个 `wait()` 操作去睡眠并且稍后重试。
+
+```rust
+    pub fn read(&self) -> ReadGuard<T> {
+        let mut s = self.state.load(Relaxed);
+        loop {
+            if s < u32::MAX {
+                assert!(s != u32::MAX - 1, "too many readers");
+                match self.state.compare_exchange_weak(
+                    s, s + 1, Acquire, Relaxed
+                ) {
+                    Ok(_) => return ReadGuard { rwlock: self },
+                    Err(e) => s = e,
+                }
+            }
+            if s == u32::MAX {
+                wait(&self.state, u32::MAX);
+                s = self.state.load(Relaxed);
+            }
+        }
+    }
+```
+
+写锁定是简单的；我们仅需要改变 state 从 0 到 `u32::MAX`，或者如果它已经锁定则是 `wait()`：
+
+```rust
+    pub fn write(&self) -> WriteGuard<T> {
+        while let Err(s) = self.state.compare_exchange(
+            0, u32::MAX, Acquire, Relaxed
+        ) {
+            // Wait while already locked.
+            wait(&self.state, s);
+        }
+        WriteGuard { rwlock: self }
+    }
+```
+
+注意，锁定的 `RwLock` 确切 state 值是如何变化的，但是 `wait()` 操作希望我们给它一个确切的值去与 state 比较。这是为什么我们将来自 `compare-and-exchange` 操作的返回值用于 `wait()` 操作。
+
+释放 reader 涉及到递减状态。最终释放 RwLock 的 reader，会将 state 从 1 改变到 0，负责唤醒等待的 writer（如果有的话）。
+
+仅唤醒一个线程就足够了，因为我们知道目前没有任何正在等待的 reader。reader 根本没有理由正在等待一个读锁定的 RwLock。
+
+```rust
+impl<T> Drop for ReadGuard<'_, T> {
+    fn drop(&mut self) {
+        if self.rwlock.state.fetch_sub(1, Release) == 1 {
+            // Wake up a waiting writer, if any.
+            wake_one(&self.rwlock.state);
+        }
+    }
+}
+```
+
+writer 必须重设 state 到 0 以释放，之后它应该唤醒一个等待的 writer 或者所有正在等待的 writer。
+
+我们并不知道 reader 或者 writer 正在等待，我们也没有办法去唤醒一个 writer 或者只唤醒 reader。所以，我们只需要唤醒所有的线程：
+
+```rust
+impl<T> Drop for WriteGuard<'_, T> {
+    fn drop(&mut self) {
+        self.rwlock.state.store(0, Release);
+        // Wake up all waiting readers and writers.
+        wake_all(&self.rwlock.state);
+    }
+}
+```
+
+仅此而已！我们建立了一个非常简单但完全可用的读写锁。
+
+是时候解决一些问题了。
+
 ### 避免 writer 忙碌循环
 
+我们实现的一个问题是写锁可能导致意外地忙碌循环。
+
+如果我们有一个很多 reader 重复锁定和释放的 RwLock，那么锁定状态可能会持续变化，重复上下波动。对于我们的 `write` 方法，这导致了在 `compare-and-exchange` 操作和随后的 `wait()` 操作之间发生锁定状态的变化可能很大，尤其 `wait()` 操作（相对缓慢地）作为系统调用直接实现。这意味着 `wait()` 操作将立即返回，即使锁从未释放；它只是 reader 数量与预期的不同。
+
+解决方案是使用一个不同的 AtomicU32 让 waiter 去等待，并且仅有在我们真正想唤醒 writer 时，才改变原子的值。
+
+让我们尝试这个，通过增加一个新的 `writer_wake_counter` 字段到我们的 RwLock：
+
+```rust
+pub struct RwLock<T> {
+    /// The number of readers, or u32::MAX if write-locked.
+    state: AtomicU32,
+    /// Incremented to wake up writers.
+    writer_wake_counter: AtomicU32, // New!
+    value: UnsafeCell<T>,
+}
+
+impl<T> RwLock<T> {
+    pub const fn new(value: T) -> Self {
+        Self {
+            state: AtomicU32::new(0),
+            writer_wake_counter: AtomicU32::new(0), // New!
+            value: UnsafeCell::new(value),
+        }
+    }
+
+    // …
+}
+```
+
+`read` 方法仍然保留未改变，但是 `write` 方法现在需要等待新的原子变量。为了确保我们在看到 RwLock 被读锁定和实际进入睡眠之间不失去任何通知，我们将使用类似于实现条件变量的模式：在检查我们是否仍然想要睡眠之前，检查 `writer_wake_counter`：
+
+```rust
+    pub fn write(&self) -> WriteGuard<T> {
+        while self.state.compare_exchange(
+            0, u32::MAX, Acquire, Relaxed
+        ).is_err() {
+            let w = self.writer_wake_counter.load(Acquire);
+            if self.state.load(Relaxed) != 0 {
+                // Wait if the RwLock is still locked, but only if
+                // there have been no wake signals since we checked.
+                wait(&self.writer_wake_counter, w);
+            }
+        }
+        WriteGuard { rwlock: self }
+    }
+```
+
+writer_wake_counter 的 `Acquire` 加载操作将与 `Release` 递增操作形成一个 happens-before 关系，该操作在释放状态后立即执行，然后唤醒等待的 writer：
+
+```rust
+impl<T> Drop for ReadGuard<'_, T> {
+    fn drop(&mut self) {
+        if self.rwlock.state.fetch_sub(1, Release) == 1 {
+            self.rwlock.writer_wake_counter.fetch_add(1, Release); // New!
+            wake_one(&self.rwlock.writer_wake_counter); // Changed!
+        }
+    }
+}
+```
+
+happens-before 关系确保 write 方法不能观察到递增的 writer_wake_counter 值，而之后仍然看到尚未减少的状态值。否则，写锁定的线程可能会得出 `RwLock` 仍然被锁定，而错过唤醒通知的结论。
+
+正如之前的一样，写释放应该唤醒一个 writer 或者所有等待的 reader。由于我们仍然不知道是否有 writer 或者 reader 正在等待，我们不得不唤醒一个等待的 writer（通过 wake_one）和所有等待的 reader（使用 wake_all）：
+
+```rust
+impl<T> Drop for WriteGuard<'_, T> {
+    fn drop(&mut self) {
+        self.rwlock.state.store(0, Release);
+        self.rwlock.writer_wake_counter.fetch_add(1, Release); // New!
+        wake_one(&self.rwlock.writer_wake_counter); // New!
+        wake_all(&self.rwlock.state);
+    }
+}
+```
+
+> 在一些操作系统中，唤醒操作背后的操作会返回它唤醒的线程数量。它可能表示低于唤醒线程实际数量的个数（由于虚假地唤醒），但是它的返回值仍然可以用于优化。
+>
+> 在以上的 drop 实现中，例如，如果 `wake_one()` 操作将表示它却是能唤醒一个性能，我们可能跳过 `wake_all()` 调用。
+
 ### 避免 writer 陷入饥饿
+
+RwLock 的一个通常用例是频繁使用 reader 的情况，但是非常少，通常仅有一个，不经常的 writer 的情况。例如，一个线程可能负责读取一些传感器输入或者定期下载许多其它线程需要使用的新数据。
+
+在这种情况下，我们可以快速地遇到一个叫做 *writer 饥饿*的问题：一种情况是，writer 从未得到一个机会去锁定 RwLock，因为周围总是有 reader 保持 `RwLock` 读锁定。
+
+一个解决方式是去防止任何新的 reader 在有 writer 时取得锁，即使 RwLock 仍然是读锁定。这样，所有新的 reader 都将等待直到轮到 writer，这确保了 reader 将获取到 writer 想要共享的最新的数据。
+
+让我们实现这个。
+
+为了完成这个，我们需要跟踪是否有任意的等待 waiter。为了在 state 变量中为这些信息腾出空间，我们可以将 reader 的数量乘以 2，并且有 writer 等待的情况下加 1。这意味着 6 或者 7 的 state 表示有 3 个激活的 read 锁定的情况：6 没有一个等待的 writer，7 有一个等待的 writer。
+
+如果我们保持 `u32::MAX`，这是一个奇数，作为写锁定的状态，那么如果 state 是奇数，那么 reader 将不得不等待，但是如果 state 是偶数，这很轻松地可以通过递增它来获取一个读锁定状态。
+
+```rust
+pub struct RwLock<T> {
+    /// The number of read locks times two, plus one if there's a writer waiting.
+    /// u32::MAX if write locked.
+    ///
+    /// This means that readers may acquire the lock when
+    /// the state is even, but need to block when odd.
+    state: AtomicU32,
+    /// Incremented to wake up writers.
+    writer_wake_counter: AtomicU32,
+    value: UnsafeCell<T>,
+}
+```
+
+我们必须更改我们 `read` 方法中的两个 `if` 语句，不再将 state 与 `u32::MAX` 进行比较，而是检查 state 是否是偶数还是奇数。我们也需要改变断言语句中的上界，以确保我们增加两个而不是一个来锁定。
+
+```rust
+    pub fn read(&self) -> ReadGuard<T> {
+        let mut s = self.state.load(Relaxed);
+        loop {
+            if s % 2 == 0 { // Even.
+                assert!(s != u32::MAX - 2, "too many readers");
+                match self.state.compare_exchange_weak(
+                    s, s + 2, Acquire, Relaxed
+                ) {
+                    Ok(_) => return ReadGuard { rwlock: self },
+                    Err(e) => s = e,
+                }
+            }
+            if s % 2 == 1 { // Odd.
+                wait(&self.state, s);
+                s = self.state.load(Relaxed);
+            }
+        }
+    }
+```
+
+我们的 write 方法必须经历更大的改变。我们将使用一个 `compare-and-exchange` 循环，就像我们上面的 read 方法那样。如果 state 是 0 或者 1，这意味着 RwLock 是释放的，我们将试图去改变改变状态到 `u32::MAX` 以写锁定它。否则，我们将不得不等待。然而，在这样做之前，我们需要确保 state 是奇数，以停止新的 reader 获取锁。在确保 state 是奇数后，我们等待 `writer_wake_counter` 变量，同时需要确保锁在此期间一直没有释放。
+
+在代码中，这看起来像：
+
+```rust
+    pub fn write(&self) -> WriteGuard<T> {
+        let mut s = self.state.load(Relaxed);
+        loop {
+            // Try to lock if unlocked.
+            if s <= 1 {
+                match self.state.compare_exchange(
+                    s, u32::MAX, Acquire, Relaxed
+                ) {
+                    Ok(_) => return WriteGuard { rwlock: self },
+                    Err(e) => { s = e; continue; }
+                }
+            }
+            // Block new readers, by making sure the state is odd.
+            if s % 2 == 0 {
+                match self.state.compare_exchange(
+                    s, s + 1, Relaxed, Relaxed
+                ) {
+                    Ok(_) => {}
+                    Err(e) => { s = e; continue; }
+                }
+            }
+            // Wait, if it's still locked
+            let w = self.writer_wake_counter.load(Acquire);
+            s = self.state.load(Relaxed);
+            if s >= 2 {
+                wait(&self.writer_wake_counter, w);
+                s = self.state.load(Relaxed);
+            }
+        }
+    }
+```
+
+因为我们现在跟踪是否有任意等待的 writer，读释放现在可以在不需要的时候跳过 `wake_one()` 调用：
+
+```rust
+impl<T> Drop for ReadGuard<'_, T> {
+    fn drop(&mut self) {
+        // Decrement the state by 2 to remove one read-lock.
+        if self.rwlock.state.fetch_sub(2, Release) == 3 {
+            // If we decremented from 3 to 1, that means
+            // the RwLock is now unlocked _and_ there is
+            // a waiting writer, which we wake up.
+            self.rwlock.writer_wake_counter.fetch_add(1, Release);
+            wake_one(&self.rwlock.writer_wake_counter);
+        }
+    }
+}
+```
+
+当写锁定（state 是 `u32::MAX`）时，我们并不跟踪任何关于是否有线程正在等待的的信息。所以，我们没有用于用于写释放的的新信息，这些将保持不变：
+
+```rust
+impl<T> Drop for WriteGuard<'_, T> {
+    fn drop(&mut self) {
+        self.rwlock.state.store(0, Release);
+        self.rwlock.writer_wake_counter.fetch_add(1, Release);
+        wake_one(&self.rwlock.writer_wake_counter);
+        wake_all(&self.rwlock.state);
+    }
+}
+```
+
+对于针对“频繁读和频繁写”用例进行优化的读写锁，这是完全可以接受的，因为写锁定（并且因此写释放）很少发生。
+
+然而，对于更普遍目的的读写锁定，这绝对是值得进一步优化的，这使写锁定和释放的性能接近于高效的 3 个状态的互斥锁性能。这对读者来说是一个有趣的练习。
 
 ## 总结
 
@@ -597,7 +951,7 @@ impl Condvar {
 * 一个更有效的 mutex 追踪是否有任何的等待线程，所以它可以避免一个不需要的唤醒操作。
 * 在进行睡眠之前自旋可能对一些用例是有益的，但这很大程度取决于情况、操作系统和硬件。
 * 一个最小的条件变量的实现仅需要一个通知 counter，`Condvar::wait()` 将不得不在释放 mutex 之前和之后检查。
-*条件变量可能跟踪等待线程的数量，以避免不需要的唤醒操作。
+* 条件变量可能跟踪等待线程的数量，以避免不需要的唤醒操作。
 * 避免从 Condvar::wait 虚假唤醒可能很棘手，需要额外的内部管理。
 * 一个最小的读写锁仅需要一个原子计数作为状态。
 * 一个额外的原子变量可以用于独立于 reader 唤醒 writer。
