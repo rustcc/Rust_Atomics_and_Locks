@@ -36,10 +36,10 @@
 
 ### Reader-Writer Lock
 
-## 等待: Parking 和 Condition Variable
+## 等待: Parking 和条件变量
 
 ### Thread Parking
 
-### Condition Variable
+### 条件变量
 
 ## 总结

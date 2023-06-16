@@ -1,6 +1,6 @@
 # 第九章：构建我们自己的「锁」
 
-在该章节，我们将建造属于我们自己的 `mutex`、`condition variable` 以及 `reader-writer lock`。对于它们中的任何一个，我们都会从一个非常基础的版本开始，然后扩展它以使其更高效。
+在该章节，我们将建造属于我们自己的互斥锁（`mutex`）[^3]、条件变量（`condition variable`）[^4]以及读写锁（`reader-writer lock`）[^5]。对于它们中的任何一个，我们都会从一个非常基础的版本开始，然后扩展它以使其更高效。
 
 因为我们并不会使用来自标准库中的锁类型（因为这将是作弊行为），因此我们将不得不使用来自[第八章](./8_Operating_System_Primitives.md)的工具，才能够在不忙碌循环（`busy-looping`[^1]）的情况下使线程等待。然而，正如我们在该章节看到的，操作系统提供的可用工具因平台而异，因此很难去构建跨平台工作的东西。
 
@@ -266,7 +266,7 @@ fn lock_contended(state: &AtomicU32) {
   <h2 style="text-align: center;">Cold 和 Inline 属性</h2>
   你可以增加 `#[cold]` 属性到 `lock_contented` 函数定义，以帮助编译器理解在常见（未考虑）情况下不调用这个函数，这对 lock 方法的优化有帮助。
 
-  额外地，你也可以增加 `#[inline]` 属性到 Mutex 和 MutexGuard 防区，以通知编译器将其内联可能是一个好主意：将生成的指令将其放置在调用方法的地方。一般来说，是否能提高性能很难说，但对于这些非常小的功能，通常如此。
+  额外地，你也可以增加 `#[inline]` 属性到 Mutex 和 MutexGuard 方法，以通知编译器将其内联可能是一个好主意：将生成的指令将其放置在调用方法的地方。一般来说，是否能提高性能很难说，但对于这些非常小的功能，通常如此。
 </div>
 
 ### 基准测试
@@ -329,15 +329,262 @@ fn main() {
 
 让我们像以前一样，在两台相同的 Linux 计算机上运行基准测试。在那台较旧的 Intel 处理器的计算机上，不使用自旋版本大约需要 900ms，而使用自旋版本大约需要 750ms。这是一个改进。而在那台新的 AMD 处理器计算机上，我们得到一个相反的结果：不使用自旋大约 650ms，而使用自旋大约需要 800ms。
 
-总之，不幸的是，关于自旋是否真正提高性能的答案是“这取决于平台”，即使只看一个场景。
+总之，不幸的是，关于自旋是否真正提高性能的答案是“这取决于平台等”，即使只看一个场景。
 
-## Condition Variable
+## 条件变量
+
+让我们做一些更有趣的事情：实现一个条件变量。
+
+正如我们在[第一章“条件变量”](./1_Basic_of_Rust_Concurrency.md#条件变量)中见到的，条件变量与 mutex 一起使用，以等待受 mutex 保护的数据与某些条件匹配。它有一个等待方法释放 mutex，等待一个信号，并再次锁定相同的 mutex。通常由其它线程发送信号，在修改 mutex 保护的数据后立即发送给一个等待的线程（通常叫做“通知一个”或“单播”）或者通知所有等待的线程（通常叫做“通知所有”或“广播”）。
+
+虽然条件变量试图让等待线程保持睡眠状态，直到它发出一个信号，但等待线程可能没有相应信号的情况下被虚假地唤醒。然而，条件变量的等待操作将仍然是在返回之前重新锁定 mutex。
+
+注意，此接口与我们的类 futex `wait()`、`wake_one()` 以及 `wake_all()` 几乎相同。主要的不同是在于防止信号丢失的机制。条件变量在释放 mutex 之前开始“监听”信号，以便不错过任何信号，而我们的 futex 风格的 `wait()` 函数依赖于原子变量状态的检查，以确保等待仍然是一个好的方式。
+
+这导致了条件变量以下最小实现的想法：如果我们确保每个通知都更改原子变量（例如计数器），那么我们的 `Condvar::wait()` 方法需要做的就是在释放 mutex 之前，检查该变量的值，并且在释放它之后，传递它到 futex 风格的 `wait()` 函数。这样，如果自释放 mutex 以来，收到任意通知信号，它将不再睡眠。
+
+我们试试吧！
+
+我们开始从 Condaver 结构体开始，该结构体仅包含单个 AtomicU32，我们用 0 初始化：
+
+```rust
+pub struct Condvar {
+    counter: AtomicU32,
+}
+
+impl Condvar {
+    pub const fn new() -> Self {
+        Self { counter: AtomicU32::new(0) }
+    }
+
+    //…
+}
+```
+
+通知方法是简单的。它们仅需要改变 counter 以及使用相应的唤醒操作去通知任意的等待线程：
+
+```rust
+    pub fn notify_one(&self) {
+        self.counter.fetch_add(1, Relaxed);
+        wake_one(&self.counter);
+    }
+
+    pub fn notify_all(&self) {
+        self.counter.fetch_add(1, Relaxed);
+        wake_all(&self.counter);
+    }
+```
+
+（稍后我们会讨论内存排序）
+
+等待方法将采用 `MutexGuard` 作为参数，因为它表示已锁定 mutex 的证明。它将也返回 `MutexGuard`，因为它要确保在返回之前，再次锁定 mutex。
+
+正如我们之前概述的那样，该方法将首先检查 counter 当前的值，然后再释放 mutex。释放 mutex 之后，如果 counter 仍未改变，它将继续等待，以确保我们不会失去任意信号。一下是作为代码的样子：
+
+```rust
+   pub fn wait<'a, T>(&self, guard: MutexGuard<'a, T>) -> MutexGuard<'a, T> {
+        let counter_value = self.counter.load(Relaxed);
+
+        // Unlock the mutex by dropping the guard,
+        // but remember the mutex so we can lock it again later.
+        let mutex = guard.mutex;
+        drop(guard);
+
+        // Wait, but only if the counter hasn't changed since unlocking.
+        wait(&self.counter, counter_value);
+
+        mutex.lock()
+    }
+```
+
+> 这里用了 MutexGuard 的私有 mutex 字段。Rust 中的私有性是基于模块的，所以如果你正在与 MutexGuard 不同的模块定义这个，则需要将 MutexGuard 的 mutex 字段标记如下，例如，`pub(crate)` 使其在 crate 中的其它模块可见。
+
+在我们成功的完成我们的条件变量之前，让我们开始考虑一下内存排序。
+
+当 mutex 锁定时，没有其它线程可以改变受保护的 mutex 数据。因此，我们并不需要担心来自我们释放 mutex 之前的通知，因为只要我们保持 mutex 锁定，数据就不会发生任何变化，这会让我们改变关于想要睡眠和等待的想法。
+
+我们唯一感兴趣的情况是，我们释放 mutex 后，另一个线程出现并且锁定 mutex，改变受保护的数据，并且向我们发出信号（希望在释放 mutex 之后）。
+
+在这种情况下，在 `Condvar::wait()` 释放 mutex 和在通知线程中锁定 mutex 之间有一个 happens-before 关系。该关系是确保我们的 Relaxed 加载（在解锁之前发生）会观察到通知的 Relaxed 加 1 操作（在锁定之后发生）之前的值。
+
+我们并不知道 `wait()` 操作是否会在加 1 之前或者之后看到值，因为此时没有任何东西可以保证排序。然而，这并不重要，因为 `wait()` 在相应的唤醒操作中具有原子性行为。要么它看见新值，在这种情况下，它根本不会进入睡眠，或者它看见旧值，在这种情况下，它会进入睡眠，并由来自通知中相应的 `wake_one()` 或者 `wake_all()` 唤醒。
+
+图 9-2 展示了操作和 happens-before 关系，在这种情况下，一个线程使用 `Condvar::wait()` 等待一些受 mutex 保护的数据更改，并由第二个线程唤醒，该线程修改数据并且调用 `Condvar::wake_one()`。注意，由于释放和锁定操作，第一次加载操作能够保证观察到递增之前到值。
+
+![ ](./picture/raal_0902.png)
+*图 9-2。一个线程使用 `Condvar::wait()` 被另一个使用 `Condvar::notify_one()` 的线程唤醒的操作和 happens-before 的关系。*
+
+我们应该也考虑如果 conter 溢出会发生什么。
+
+只要每次通知之后计数器是不同的，它的真实值就无关紧要。不幸的是，在超过 40 亿个通知之后，计数器将溢出，并以 0 重新启动，回到之前使用过的值。从技术上讲，我们的 `Condvar::wait()` 实现可能在不应该的时候进入睡眠状态：如果它正好错过了 4,292,967,296 条通知（或者任意它的倍数），它会溢出计数器，直到它之前拥有的值。
+
+认为这种情况发生的可能性可以忽略不计是完全合理的。与我们在 mutex 锁定方法所做的不同，我们不会在这里唤醒后，重新检查状态和重复和重复 `wait()` 调用，所以我们仅需要关心在 counter 的 relaxed 加载操作和 `wait()` 调用之间的那一刻发生溢出往返（round-trip）。如果一个线程中断太久，以至于（确切地）允许发生许多通知，那么可能已经出现大问题，并且程序已经变得没有响应。此时，人们可能会合理地争辩到：线程保持睡眠的微观额外风险不再重要。
+
+>在支持有时间限制的 futex 式等待的平台上，可以使用几秒钟的等待操作使用超时来降低溢出的风险。发送 40 亿条通知将花费更长的时间，此时，额外的几秒钟的风险将产生非常小的影响。这完全消除了由于等待线程错误地一直待在睡眠状态而导致程序锁定的的任何风险。
+
+让我们看看它是否工作！
+
+```rust
+#[test]
+fn test_condvar() {
+    let mutex = Mutex::new(0);
+    let condvar = Condvar::new();
+
+    let mut wakeups = 0;
+
+    thread::scope(|s| {
+        s.spawn(|| {
+            thread::sleep(Duration::from_secs(1));
+            *mutex.lock() = 123;
+            condvar.notify_one();
+        });
+
+        let mut m = mutex.lock();
+        while *m < 100 {
+            m = condvar.wait(m);
+            wakeups += 1;
+        }
+
+        assert_eq!(*m, 123);
+    });
+
+    // Check that the main thread actually did wait (not busy-loop),
+    // while still allowing for a few spurious wake ups.
+    assert!(wakeups < 10);
+}
+```
+
+我们计算条件变量从它的 wait 方法返回的次数，以确保它实际上进入了的睡眠。如果它返回的数值非常大，那就表明我们不小心自旋了。重要的是测试这个，因为从未睡眠的条件变量仍然会导致“正确的”行为，但会有效地将等待循环变成一个自旋循环。
+
+如果我们运行这个测试，我们会看到它编译并顺利通过，确认我们的条件变量确实将我们的主线程置于睡眠状态。当然，这并不能证明它的实现是正确的。如果有必要，可以使用涉及多个线程的长时间压力测试，理想情况下，在弱序处理器架构的计算机上运行，以获得更多信心。
 
 ### 避免系统调用2
 
+正如我们在[“Mutex：避免系统调用”](#避免系统调用)中的那样，优化一个锁定原语主要是避免不需要的等待和唤醒操作。
+
+就我们的条件变量而言，在我们的 `Condvar::wait()` 实现中尝试避免 `wait()` 调用没有多大用处。当线程决定条件变量时，它已经检查了它正在等待的事情还没有发生，并且它需要进入睡眠。如果不需要等待，它根本就不用调用 `Condvar::wait()`。
+
+然而，我们可以避免调用 `wake_one()` 和 `wake_all()` 调用，就像我们为 Mutex 所做的那样。
+
+一个简单的方式是去保持跟踪正在等待线程的数量。我们的等待方法需要在等待之前递增，并且在完成的时候递减。然后如果跟踪的数值是 0，通知方法会跳过发送它们的信号。
+
+所以，我们增加了一个新的字段到我们的 `Condvar` 结构体，以跟踪激活的等待者的数量：
+
+```rust
+pub struct Condvar {
+    counter: AtomicU32,
+    num_waiters: AtomicUsize, // New!
+}
+
+impl Condvar {
+    pub const fn new() -> Self {
+        Self {
+            counter: AtomicU32::new(0),
+            num_waiters: AtomicUsize::new(0), // New!
+        }
+    }
+
+    //…
+}
+```
+
+通过将 AtomicUsize 用于 num_waiters，我们不必要担心它溢出。usize 是足够大的，能够计算内存中的每个字节，所以如果我们假设每个激活的线程占用至少内存的一个字节，它是绝对的足够大，能够计算任意数量的并发的存在线程。
+
+下一步，我们更新我们的通知功能，如果没有等待线程，则什么也不做：
+
+```rust
+    pub fn notify_one(&self) {
+        if self.num_waiters.load(Relaxed) > 0 { // New!
+            self.counter.fetch_add(1, Relaxed);
+            wake_one(&self.counter);
+        }
+    }
+
+    pub fn notify_all(&self) {
+        if self.num_waiters.load(Relaxed) > 0 { // New!
+            self.counter.fetch_add(1, Relaxed);
+            wake_all(&self.counter);
+        }
+    }
+```
+
+（我们稍后会讨论内存排序）。
+
+最后，最重要的是，我们在等待方法开始时增加它，并在它唤醒后立即减少：
+
+```rust
+    pub fn wait<'a, T>(&self, guard: MutexGuard<'a, T>) -> MutexGuard<'a, T> {
+        self.num_waiters.fetch_add(1, Relaxed); // New!
+
+        let counter_value = self.counter.load(Relaxed);
+
+        let mutex = guard.mutex;
+        drop(guard);
+
+        wait(&self.counter, counter_value);
+
+        self.num_waiters.fetch_sub(1, Relaxed); // New!
+
+        mutex.lock()
+    }
+```
+
+我们应该再次仔细询问我们自己，对于所有这些原子操作，Relaxed 内存排序是否应该足够。
+
+我们引入的一个新的潜在风险是，通知方法在 num_waiters 中观察到 0，跳过了它的唤醒操作，实际上却有一个线程需要唤醒。这种情况可能当通知方法在递增操作之前或者递减操作之后观察到值时发生。
+
+就像从 counter 中的 relaxed 加载操作一样，事实上，在递增 num_waiters 时，等待者将仍然持有 mutex，这确保了在释放 mutex 之后发生的任何 num_waiters 加载操作都不会看到它被递增之前的值。
+
+我们也不需要担心通知线程观察到递减值“太快”，因为一旦执行递减操作，或许在虚假唤醒之后，等待线程不再需要被唤醒。
+
+换句话说，mutex 建立的 happens-before 关系仍然提供了我们需要的所有保证。
+
 ### 避免虚假唤醒
 
-## Reader-Writer Lock
+另一个方式是通过避免虚假唤醒来优化我们的条件变量。每次线程被唤醒时，它将尝试锁定 mutex，这可能与其它线程产生竞争，这可能在性能上有一个巨大的影响。
+
+底层 `wait()` 操作偶尔会虚假唤醒是很罕见的，但是我们的条件变量实现很容易使得 `notify_one()` 导致不止一个线程去停止等待。如果一个线程正在进入睡眠的过程，刚刚加载了 counter 的值，但是仍然没有进入睡眠，那么调用 `notify_one()` 将由于更新的 counter 从而阻止线程进入睡眠状态，但也会因为后续的 `wake_one()` 操作导致第二个线程唤醒。这两个线程将先后竞争 mutex，浪费宝贵的处理器时间。
+
+这听起来像是一个罕见的现象，但是由于 mutex 最终如何同步线程是未知的，这实际上很容易发生。在条件变量上调用 `notify_one()` 的线程最有可能在此之前立即锁定和释放 mutex，以改变等待线程正在等待的数据的某些内容。这意味着，一旦 `Condvar::wait()` 方法释放了 mutex，那就有可能立刻解除了正在等待 mutex 的通知线程的阻塞。此刻，这两个线程正在竞争：等待线程正在进入睡眠，通知线程正在锁定和释放 mutex 并且通知条件变量。如果通知线程赢得竞争，等待线程将由于 counter 递增而不会进入睡眠，但是通知线程仍然调用 `wake_one()`。这正是上面描述的问题情况，它可能会不必要地唤醒一个额外线程。
+
+一个相对简单的解决方案是跟踪允许唤醒的线程数量（即从 `Condvar::wait()` 返回）。`notify_one()` 方法会将其增加 1，并且如果它不是 0，等待方法会试图将其减少 1。如果 counter 是 0，它可以进入（返回）睡眠状态，而不是试图重新锁定 mutex 并且返回。（通知添加另一个专门用于 `notify_all` 的计数器来通知所有线程来完成，该 counter 永远不会减少。）
+
+这种方式是有效的，但是有一个新的并且更微妙的问题：通知可能唤醒一个甚至仍没有调用 `Condvar::wait()` 的线程，包括它自身。调用 `Condvar::notify_one()` 将增加应该唤醒的线程数量，并且使用 `wake_one()` 去唤醒一个等待线程。然而，如果另一个（甚至相同的）线程在已经等待的线程有机会唤醒之前调用 `Condvar::wait()`，新等待的线程可以看到一个通知待处理，并通过将 counter 减少到 0 来声明它，并立即返回。正在等待的第一个线程将返回睡眠状态，因为另一个线程已经获取了一个通知。
+
+根据用例，这可能完全没有问题，或者有大问题，导致一些线程从未取得进展。
+
+> GNU libc 的 `pthread_cond_t` 的实现曾经受到这个问题影响。后来，经过大量关于 POSIX 规范是否允许的讨论，这个问题最后随着 2017 的 GNU libc 2.25 的发布而最终解决，这包含一个全新的条件变量实现。
+
+在很多使用条件变量的情况下，等待线程会抢走一个更早的通知。然而，当为一般类型而不是特定用例的类型实现条件变量时，该行为可能是不可接受的。
+
+同样，我们必须得出结论，我们是否应该使用一个优化方式的答案是，不出意外的是，“这取决于平台等”。
+
+> 有一些方法去比变这个问题，同时仍然比main虚假唤醒，但这些方法要比其它方法复杂得多。
+>
+> GNU libc 的新条件变量解决方案包括将等待线程分为两组，仅允许第一组去消费通知，并在第一组没有等待线程时交换组。
+>
+>这种算法的一个缺点是，不仅是算法的复杂性，同时也显著增加条件变量类型的大小，因为它现在需要跟踪更多的信息。
+
+<div style="border:medium solid green; color:green;">
+  <h2 style="text-align: center;">惊群问题（Thundering Herd Problem）</h2>
+  当使用 notify_one() 唤醒正在等待很多相同事情的线程时，当使用条件变量时可能遇到的高性能问题。
+
+  问题是，在唤醒后，所有这些线程都将立即尝试锁定相同的 mutex。更可能地是，仅有一个线程将成功，并且所有其它线程都将回到睡眠状态。很多线程都急于宣称相同资源的资源浪费问题被称为<i>惊群问题</i>。
+
+  认为 Condvar::notify_all() 是从根本上不值得优化的反模式不是没有原因的。条件变量的目的是去释放 mutex 并且当接受通知时重新锁定它，因此也许一次通知多个线程从来不是任何好主意。
+
+  甚至，如果我们想针对这种情况进行优化，我们可以在像 futex 这种支持<i>重新排队</i>操作的操作系统上，例如在 Linux 山的 FUTEX_REQUEUE（参见<a href="./8_Operating_System_Primitives.md">第八章“Futex 操作”</a>）
+
+  与其唤醒许多线程，一旦它们意识到锁已经被占用，除一个线程外，其它线程都将立刻回到睡眠状态，我们可以<i>重新</i>排队除一个线程外的其它所有线程，以便它们的 futex 等待操作不再等待条件变量的 counter，而是开始等待 mutex 的状态。
+
+  重新排队一个等待线程不会唤醒它。时上升，线程甚至不知道自己已经在重新排队。不幸地是，这可能导致一些非常细微的陷阱。
+
+  例如，还记得 3 个状态的 mutex 总是在唤醒后必须锁定正确的状态（“有着等待线程的锁定”），以确保其它等待线程不会被遗忘？这意味着我们应该不在我们的 `Condvar::wait()` 实现中使用常规的 mutex 方法，这可能将 mutex 设置到一个错误的状态。
+
+  一个重新排队的条件变量实现需要存储等待线程使用的 mutex 的指针。否则，通知线程将不知道等待线程重新排队到哪个原子变量（互斥体状态）。这就是为什么条件变量通常允许两个线程去等待不同的 mutex。尽管许多条件变量的实现并未利用重新排队，但未来版本可能利用此功能的可能性是有用的。
+</div>
+
+## 读写锁
 
 ### 避免 writer 忙碌循环
 
@@ -345,5 +592,21 @@ fn main() {
 
 ## 总结
 
+* atomic-wait crate 提供了一个基础的类 futex 功能，适用于所有主要的操作系统（最新版本）。
+* 一个最小的实现仅需要两个状态，像我们来自[第四章](./4_Building_Our_Own_Spin_Lock.md)的 `SpinLock`。
+* 一个更有效的 mutex 追踪是否有任何的等待线程，所以它可以避免一个不需要的唤醒操作。
+* 在进行睡眠之前自旋可能对一些用例是有益的，但这很大程度取决于情况、操作系统和硬件。
+* 一个最小的条件变量的实现仅需要一个通知 counter，`Condvar::wait()` 将不得不在释放 mutex 之前和之后检查。
+*条件变量可能跟踪等待线程的数量，以避免不需要的唤醒操作。
+* 避免从 Condvar::wait 虚假唤醒可能很棘手，需要额外的内部管理。
+* 一个最小的读写锁仅需要一个原子计数作为状态。
+* 一个额外的原子变量可以用于独立于 reader 唤醒 writer。
+* 为了避免 writer 饥饿，需要额外的状态优先考虑一个等待的 writer 而不是新的 reader。
+
 [^1]: <https://zh.wikipedia.org/wiki/忙碌等待>
 [^2]: 虚假唤醒是一个线程在没有收到明确的信号的情况下，从等待状态中被唤醒
+[^3]: <https://zh.wikipedia.org/wiki/互斥锁>
+[^4]: <https://zh.wikipedia.org/zh-cn/監視器_(程序同步化)>
+[^5]: <https://zh.wikipedia.org/wiki/读写锁>
+
+参考：<https://zh.wikipedia.org/wiki/惊群问题>
