@@ -15,9 +15,9 @@
   * [Rust 的 Mutex](./1_Basic_of_Rust_Concurrency.md#rust-的-mutex)
   * [锁毒化](./1_Basic_of_Rust_Concurrency.md#锁毒化)
   * [Reader-Writer Lock](./1_Basic_of_Rust_Concurrency.md#reader-writer-lock)
-* [等待：Parking 和 Condition Variable](./1_Basic_of_Rust_Concurrency.md#等待-parking-and-condition-variable)
+* [等待：Parking 和条件变量](./1_Basic_of_Rust_Concurrency.md#等待-parking-和条件变量)
   * [Thread Parking](./1_Basic_of_Rust_Concurrency.md#thread-parking)
-  * [Condition Variable](./1_Basic_of_Rust_Concurrency.md#condition-variable)
+  * [条件变量](./1_Basic_of_Rust_Concurrency.md#条件变量)
 * [总结](./1_Basic_of_Rust_Concurrency.md#总结)
 
 ## [第二章：Atomic](./2_Atomics.md)
@@ -31,7 +31,7 @@
   * [示例：来自多线程的进度报道](./2_Atomics.md#示例来自多线程的进度报道)
   * [示例：统计数据](./2_Atomics.md#示例统计数据)
   * [示例：ID 分配](./2_Atomics.md#示例id-分配)
-* [比较和交换操作](./2_Atomics.md#比较和交换操作)
+* [compare-and-exchange 操作](./2_Atomics.md#compare-and-exchange-操作)
   * [示例：没有溢出的 ID 分配](./2_Atomics.md#示例没有溢出的-id-分配)
   * [示例：惰性一次性初始化](./2_Atomics.md#示例惰性一次性初始化)
 * [总结](./2_Atomics.md#总结)
@@ -123,10 +123,10 @@
   * [避免系统调用](./9_Building_Our_Own_Locks.md#避免系统调用)
   * [进一步优化](./9_Building_Our_Own_Locks.md#进一步优化)
   * [基准测试](./9_Building_Our_Own_Locks.md#基准测试)
-* [Condition Variable](./9_Building_Our_Own_Locks.md#condition-variable)
+* [条件变量](./9_Building_Our_Own_Locks.md#条件变量)
   * [避免系统调用2](./9_Building_Our_Own_Locks.md#避免系统调用2)
   * [避免虚假唤醒](./9_Building_Our_Own_Locks.md#避免虚假唤醒)
-* [Reader-Writer Lock](./9_Building_Our_Own_Locks.md#reader-writer-lock)
+* [读写锁](./9_Building_Our_Own_Locks.md#读写锁)
   * [避免 writer 忙碌循环](./9_Building_Our_Own_Locks.md#避免-writer-忙碌循环)
   * [避免 writer 陷入饥饿](./9_Building_Our_Own_Locks.md#避免-writer-陷入饥饿)
 * [总结](./9_Building_Our_Own_Locks.md#总结)
@@ -141,6 +141,6 @@
 * [序列锁](./10_Ideas_and_Inspiration.md#序列锁)
 * [教学材料](./10_Ideas_and_Inspiration.md#教学材料)
 
-注明：本文译自 <https://marabos.nl/atomics/inspiration.html#lock-free-linked-list>，弱其它平台引用此翻译，也请注明出处。
+注明：本文译自 <https://marabos.nl/atomics/inspiration.html#lock-free-linked-list>，若其它平台引用此翻译，也请注明出处。
 
 翻译进行中...
