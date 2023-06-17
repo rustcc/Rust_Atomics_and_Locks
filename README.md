@@ -133,12 +133,12 @@
 
 ## [第十章：主意和灵感](./10_Ideas_and_Inspiration.md)
 
-* [信号](./10_Ideas_and_Inspiration.md#信号)
+* [信号量](./10_Ideas_and_Inspiration.md#信号)
 * [RCU](./10_Ideas_and_Inspiration.md#rcu)
 * [无锁链表](./10_Ideas_and_Inspiration.md#无锁链表)
 * [基于队列的锁](./10_Ideas_and_Inspiration.md#基于队列的锁)
 * [基于 Parking 的锁](./10_Ideas_and_Inspiration.md#基于-parking-的锁)
-* [序列锁](./10_Ideas_and_Inspiration.md#序列锁)
+* [顺序锁](./10_Ideas_and_Inspiration.md#顺序锁spinlock)
 * [教学材料](./10_Ideas_and_Inspiration.md#教学材料)
 
 注明：本文译自 <https://marabos.nl/atomics/inspiration.html#lock-free-linked-list>，若其它平台引用此翻译，也请注明出处。
