@@ -15,8 +15,8 @@
   * [Rust 的 Mutex](./1_Basic_of_Rust_Concurrency.md#rust-的-mutex)
   * [锁毒化](./1_Basic_of_Rust_Concurrency.md#锁毒化)
   * [Reader-Writer Lock](./1_Basic_of_Rust_Concurrency.md#reader-writer-lock)
-* [等待：Parking 和条件变量](./1_Basic_of_Rust_Concurrency.md#等待-parking-和条件变量)
-  * [Thread Parking](./1_Basic_of_Rust_Concurrency.md#thread-parking)
+* [等待：阻塞和条件变量](./1_Basic_of_Rust_Concurrency.md#等待-阻塞park和条件变量)
+  * [线程阻塞](./1_Basic_of_Rust_Concurrency.md#线程阻塞)
   * [条件变量](./1_Basic_of_Rust_Concurrency.md#条件变量)
 * [总结](./1_Basic_of_Rust_Concurrency.md#总结)
 
@@ -137,7 +137,7 @@
 * [RCU](./10_Ideas_and_Inspiration.md#rcu)
 * [无锁链表](./10_Ideas_and_Inspiration.md#无锁链表)
 * [基于队列的锁](./10_Ideas_and_Inspiration.md#基于队列的锁)
-* [基于 Parking 的锁](./10_Ideas_and_Inspiration.md#基于-parking-的锁)
+* [基于阻塞的锁](./10_Ideas_and_Inspiration.md#基于阻塞的锁)
 * [顺序锁](./10_Ideas_and_Inspiration.md#顺序锁spinlock)
 * [教学材料](./10_Ideas_and_Inspiration.md#教学材料)
 

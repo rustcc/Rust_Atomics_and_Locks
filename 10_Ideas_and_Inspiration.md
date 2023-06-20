@@ -84,11 +84,11 @@ Windows SRW 锁（[第8章中的“一个轻巧的读写锁”](./8_Operating_Sy
 * [关于 Windows SRW 锁的实现](https://oreil.ly/El8GA)
 * [基于队列的锁的 Rust 实现](https://oreil.ly/aFyg1)
 
-## 基于 Parking 的锁
+## 基于阻塞的锁
 
 为了创建一个尽可能小的高效 mutex，你可以通过将队列移动到全局的数据结构，在 mutex 自身只留下 1 或者 2 个位，来构建基于队列的锁的想法。这样，mutex 仅需要是一个字节。你甚至可以把它放置在一些未使用的指针位中，这允许非常细粒度的锁定，几乎没有其他额外的开销。
 
-全局的数据结构可以是一个 `HashMap`，将内存地址映射到等待该地址的 mutex 的线程队列。全局的数据结构通常叫做 `parking lot`，因为它是一组被 `park` 的线程合集。
+全局的数据结构可以是一个 `HashMap`，将内存地址映射到等待该地址的 mutex 的线程队列。全局的数据结构通常叫做 `parking lot`，因为它是一组被阻塞（`park`）的线程合集。
 
 ![ ](./picture/raal_10in05.png)
 
