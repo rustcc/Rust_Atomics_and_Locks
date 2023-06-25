@@ -426,17 +426,162 @@ let b = unsafe { a.get_unchecked(index) };
 
 在[“引用计数”](#引用计数)中，我们已经看到一个设计内部可变性的微妙示例。在 `Rc` 和 `Arc` 都变为引用计数器，即使可能有多个克隆都使用相同的引用计数器。
 
+一旦设计内部可变性类型，称“不可变”和“可变”将变得混乱和不准确，因为一些类型可以通过两者变得可变。更准确的称呼是“共享”和“独占”：共享引用（`&T`）可以被复制以及与其它引用共享，然而*独占引用*（`&mut T`）保证了仅有一个对 T 的独占借用。对于大多数类型，共享引用并不允许可变，但有一些例外。由于本书我们将主要处理这些例外情况，我们将在这本书的剩余内容中使用更准确的术语。
+
+> 请记住，内部可变性仅会影响共享借用的规则，以便在共享时允许可变。它不能改变任意关于独占借用的规则。独占借用仍然保证没有任意激活的借用。导致超过一个活动的独占引用的不安全代码总是涉及未定义行为，不管内部可变性如何。
+
+让我们看一看有着内部可变性的一些示例，以及如何通过共享引用允许可变性而不导致未定义行为。
+
 ### Cell
+
+`std::cell::Cell<T>` 仅是包裹了 T，但允许通过共享引用进行可变。为避免未定义行为，它仅允许你讲值复制出来（如果 T 实现 Copy）或者将其替换为另一个整体值。此外，它仅用于单个线程。
+
+让我们看一看与上一节相似的示例，但是这一次使用 `Cell<i32>` 而不是 `i32`：
+
+```rust
+use std::cell::Cell;
+
+fn f(a: &Cell<i32>, b: &Cell<i32>) {
+    let before = a.get();
+    b.set(b.get() + 1);
+    let after = a.get();
+    if before != after {
+        x(); // might happen
+    }
+}
+```
+
+与上次不同，现在 if 条件有可能为真。因为 `Cell<i32>` 是内部可变的，只要我们有对它的共享引用，编译器不再假设它的值不再改变。a 和 b 可能引用相同的值，通过 b 也可能影响 a。然而，它可能同时假设没有其它线程同时获取 cell。
+
+对 Cell 的限制并不总是容易处理的。因为它不能直接让我们借用它所持有的值，我们需要将值移动出去（让一些东西替换它的位置），修改它，然后将它放回去，以改变它的内容：
+
+```rust
+fn f(v: &Cell<Vec<i32>>) {
+    let mut v2 = v.take(); // Replaces the contents of the Cell with an empty Vec
+    v2.push(1);
+    v.set(v2); // Put the modified Vec back
+}
+```
 
 ### RefCell
 
+与常规的 Cell 不同的是，`std::cell::RefCell` 与许你以很小的运行时花费去借用它的内容。`RefCell<T>` 不仅持有 T，同时也持跟踪任何未解除的借用。如果你尝试在已经可变借用时尝试借用（或反之亦然），它会引发 panic，以避免出现未定义行为。就像 Cell，RefCell 只能在单个线程中使用。
+
+借用 RefCell 的内容通过调用 `borrow` 或者 `borrow_mut` 完成：
+
+```rust
+use std::cell::RefCell;
+
+fn f(v: &RefCell<Vec<i32>>) {
+    v.borrow_mut().push(1); // We can modify the `Vec` directly.
+}
+```
+
+尽管 Cell 和 RefCell 有时是非常有用的，但是当我们使用多线程的时候，它们会变得无用。所以让我们继续讨论与并发相关的类型。
+
 ### 互斥锁[^4]和读写锁[^5]
+
+*读写锁*（RwLock）是 `RefCell` 的并发版本。`RwLock<T>` 持有 T 并且跟踪任意未解除的借用。然而，与 RefCell 不同，它在冲突借用中不会 panic。相反，它会阻塞当先线程——使它进入睡眠——直到冲突借用消失才会唤醒。在其它线程完成后，我们仅需要耐心的等待轮到我们处理数据。
+
+借用 RwLock 的内容称为*锁*。通过锁定它，我们临时阻塞并发的冲突借用，这允许我们没有导致数据竞争的借用它。
+
+`Mutex` 是非常相似的，但是概念上是简单的。它不像 RwLock 跟踪共享借用和独占借用的数量，它仅允许独占借用。
+
+我们将在[“锁：互斥锁和读写锁”](#锁互斥锁和读写锁)更详细地介绍这些类型。
 
 ### Atomic
 
+原子类型表示 Cell 的并发版本，是第 [2](./2_Atomics.md) 章和第 [3](./3_Memory_Ordering.md) 章的主题。与 Cell 相同，它们通过将整个值进行复制来避免未定义行为，而不直接让我们借用内容。
+
+与 Cell 不同的是，它们不能是任意大小的。因此，任何 T 都没有通用的 `Atomic<T>` 类型，但仅有特定的原子类型，例如 `AtomicU32` 和 `AtomicPtr<T>`。哪些可用取决于平台，因为它们需要处理器的支持来避免数据竞争。（我们将在[第七章](./7_Understanding_the_Processor.md)研究这个问题。）
+
+因为它们的大小非常有限，原子类型通常不直接在线程之间共享所需的信息。相反，它们通常用作工具，是线程之间共享其它（通常是更大的）东西作为可能。当原子用于表示其它数据时，情况可能变得令人意外地复杂。
+
 ### UnsafeCell
 
+`UnsafeCell` 是内部可变性的原始构建块。
+
+`UnsafeCell<T>` 包裹 T，但是没有附带任何条件和限制来避免未定义行为。相反，它的 `get()` 方法仅是给出了它包装值的原始指针，该值仅可以在 `unsafe` 块中使用。它以用户不会导致任何未定义行为的方式使用它。
+
+更常见的是，不会直接使用 UnsafeCell，而是将它包裹在另一个类型，通过限制接口提供安全，例如 `Cell` 和 `Mutex`。所有有着内部可变性的类型——包括所有以上讨论的类型都建立在 UnsafeCell 之上。
+
 ## 线程安全：Send 和 Sync
+
+在这一章节中，我们已经看见一个不是*线程安全*的类型，这些类型仅用于一个单线程，例如 `Rc`、`Cell` 以及其它。由于需要这些限制来避免未定义行为，编译器需要为你理解和检查，因此你可以使用这些类型，而不必使用 unsafe 块。
+
+该语言使用两种特殊的 trait 以更总这些类型可以安全地用作交叉线程：
+
+* *Send*
+  * 如果可以发送到另一个线程，则是 `Send` 类型。换句话说，是否该类型值的所有权可以转移到另一个线程。例如，`Arc<i32>` 是 `Send`，而 `Rc<i32>` 不是。
+* *Sync*
+  * 如果可以共享到另一个线程，则是 `Sync` 类型。换句话说，当且仅当对该类型的共享引用 `&T` 是 `Send` 的，类型 T 是 `Sync`。例如，i32 是 `Sync`，而 `Cell<i32>` 不是。（然而 `Cell<i32>` 是 `Send` 的）
+
+原始类型，例如 i32、bool 以及 str 都是 `Send` 和 `Sync`。
+
+这两个 trait 会自动地为你实现 trait，这意味着他们会基于它们的字段为你的类型自动地实现。带有全部 `Send` 和 `Sync` 的结构体字段，本身也是 `Send` 和 `Sync`。
+
+选择退出其中任何一种的方式是去增加没有实现该 trait 的字段到你的类型。为此，特殊的 `std::marker::PhantomData<T>` 类型经常派上用场。该类型被编译器视为 T，除非它在运行时实际上不存在。它是零开销类型，不占用任何空间。
+
+让我们来看看以下的结构体：
+
+```rust
+use std::marker::PhantomData;
+
+struct X {
+    handle: i32,
+    _not_sync: PhantomData<Cell<()>>,
+}
+```
+
+在这个示例中，如果 `handle` 是它唯一的字段，`X` 将是 `Send` 和 `Sync`。然而，我们增加一个零开销带下的 `PhantomData<Cell<()>>` 字段，该字段被视为 `Cell<()>`。因为 `Cell<()>` 字段不是 Sync，X 也将不是。但它仍然是 Send，因为所有字段都实现了 Send。
+
+原始指针（`*const T` 和 `*mut T`）既不是 Send 也不是 Sync，因为编译器不了解他们表示什么。
+
+选择任意 trait 的方式和使用任意其它 trait 相同；使用一个 impl 为你的类型实现 trait：
+
+```rust
+struct X {
+    p: *mut i32,
+}
+
+unsafe impl Send for X {}
+unsafe impl Sync for X {}
+```
+
+注意，实现这些 trait 需要 `unsafe` 关键字，因为编译器不能为你检查它是否正确。这是你对编译器作出的承诺，你不得不信任它。
+
+如果你尝试去移动一些未实现 Send 的值进入另一个线程，编译器将阻止你这样做。有一个小的示例去演示：
+
+```rust
+fn main() {
+    let a = Rc::new(123);
+    thread::spawn(move || { // Error!
+        dbg!(a);
+    });
+}
+```
+
+这里，我们尝试去发送 `Rc<i32>` 到一个新线程，但是 `Rc<i32>` 与 `Arc<i32>` 不同，它没有实现 Send。
+
+如果我们尝试去编译以上示例，我们将面临看山区像这样的错误：
+
+```txt
+error[E0277]: `Rc<i32>` cannot be sent between threads safely
+   --> src/main.rs:3:5
+    |
+3   |     thread::spawn(move || {
+    |     ^^^^^^^^^^^^^ `Rc<i32>` cannot be sent between threads safely
+    |
+    = help: within `[closure]`, the trait `Send` is not implemented for `Rc<i32>`
+note: required because it's used within this closure
+   --> src/main.rs:3:19
+    |
+3   |     thread::spawn(move || {
+    |                   ^^^^^^^
+note: required by a bound in `spawn`
+```
+
+`thread::spawn` 函数需要它的参数实现 Send，并且只有当其所有的捕获都是 Send，闭包才是 Send。如果我们尝试捕获不是 Send 的实现，就会捕捉我们的错误，保护我们避免未定义行为的影响。
 
 ## 锁：互斥锁和读写锁
 
