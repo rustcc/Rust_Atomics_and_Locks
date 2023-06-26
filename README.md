@@ -13,7 +13,7 @@
 * [线程安全：Send 和 Sync](./1_Basic_of_Rust_Concurrency.md#线程安全send-和-sync)
 * [锁：Mutex 和 RwLock](./1_Basic_of_Rust_Concurrency.md#锁mutex-和-rwlock)
   * [Rust 的 Mutex](./1_Basic_of_Rust_Concurrency.md#rust-的-mutex)
-  * [锁毒化](./1_Basic_of_Rust_Concurrency.md#锁毒化)
+  * [锁中毒](./1_Basic_of_Rust_Concurrency.md#锁中毒posion)
   * [Reader-Writer Lock](./1_Basic_of_Rust_Concurrency.md#reader-writer-lock)
 * [等待：阻塞和条件变量](./1_Basic_of_Rust_Concurrency.md#等待-阻塞park和条件变量)
   * [线程阻塞](./1_Basic_of_Rust_Concurrency.md#线程阻塞)

@@ -585,11 +585,158 @@ note: required by a bound in `spawn`
 
 ## 锁：互斥锁和读写锁
 
+在线程之间共享（可变）数据更常规的有用工具是 `mutex`，它是“互斥”（mutual exclusion）的缩写。mutex 的工作是通过暂时阻塞其它试图同时访问某些数据的线程，来确保线程对某些数据进行独占访问。
+
+概念上，mutex 仅有两个状态：锁定和释放。当线程锁住一个未释放的 mutex，mutex 被标记为锁定，线程可以立即继续。当线程尝试锁住一个已锁定的 mutex，操作将*阻塞*。当线程等待 mutex 释放时，其会置入睡眠状态。释放仅能在锁定的 mutex 上进行，并且应当由锁定它的同一线程完成。如果其它线程正在等待锁定 mutex，释放将导致唤醒其中一个线程，因此它可以尝试再次锁定 mutex 并且继续它的过程。
+
+使用 mutex 保护数据仅是所有线程之间的约定，当它们在 mutex 锁定时，它们才能获取数据。这种方式，没有两个线程可以并发地获取数据和导致数据竞争。
+
 ### Rust 的互斥锁
 
-### 锁毒化
+Rust 的标准库通过 `std::sync::Mutex<T>` 提供这个功能。它对类型 T 进行范型化，该类型 T 是 mutex 所保护的数据类型。通过将 T 作为 mutex 的一部分，该数据仅可以通过 mutex 获取，从而提供一个安全的接口，以保证所有线程都遵守这个约定。
+
+为确保锁定的 mutex 仅通过锁定它的线程释放，所以它没有 `unlock()` 方法。然而，它的 `lock()` 方法返回一个称为 `MutexGuard` 的特殊类型。该 guard 表示保证我们已经锁定 mutex。它通过 `DerefMut` trait 行为表现像一个独占引用，使我们能够独占访问互斥体保护的数据。释放 mutex 通过 drop guard 完成。当我们 drop guard 时，我们我们放弃了获取数据的能力，并且 guard 的 `Drop` 实现将释放 mutex。
+
+让我们看一个示例，实践中的 mutex：
+
+```rust
+use std::sync::Mutex;
+
+fn main() {
+    let n = Mutex::new(0);
+    thread::scope(|s| {
+        for _ in 0..10 {
+            s.spawn(|| {
+                let mut guard = n.lock().unwrap();
+                for _ in 0..100 {
+                    *guard += 1;
+                }
+            });
+        }
+    });
+    assert_eq!(n.into_inner().unwrap(), 1000);
+}
+```
+
+在这里，我们有一个 `Mutex<i32>`，一个保护整数的 mutex，并且我们产生十个线程，每个整数增加线程 100 倍。每个线程将首先锁定 mutex 去获取 MutexGuard，并且然后使用 guard 去获取整数并修改它。当该变量超出作用域后，guard 会立即隐式 drop。
+
+线程完成后，我们可以通过 `into_inner()` 安全地从整数中移除保护。`into_inner` 方法获取 mutex 的所有权，这确保了没有其它东西可以引用 mutex，从而使 mutex 变得不再必要。
+
+尽管增加是逐步地增加的，但是线程仅能够看见 100 的倍数，因为它只能在 mutex 释放时查看整数。实际上，由于 mutex 的存在，这一百次递增称为了一个单一不可分割的原子操作。
+
+为了清晰地看见 mutex 的效果，我们可以让每个线程在释放 mutex 之前等待一秒：
+
+```rust
+use std::time::Duration;
+
+fn main() {
+    let n = Mutex::new(0);
+    thread::scope(|s| {
+        for _ in 0..10 {
+            s.spawn(|| {
+                let mut guard = n.lock().unwrap();
+                for _ in 0..100 {
+                    *guard += 1;
+                }
+                thread::sleep(Duration::from_secs(1)); // New!
+            });
+        }
+    });
+    assert_eq!(n.into_inner().unwrap(), 1000);
+}
+```
+
+当你现在运行程序，你将看见大约需要花费 10s 才能完成。每个线程仅等待 1s，但是 mutex 确保一次仅有一个线程这么做。
+
+如果我们在睡眠 1s 之前 drop guard，并且因此释放 mutex，我们将看到并行发生：
+
+```rust
+fn main() {
+    let n = Mutex::new(0);
+    thread::scope(|s| {
+        for _ in 0..10 {
+            s.spawn(|| {
+                let mut guard = n.lock().unwrap();
+                for _ in 0..100 {
+                    *guard += 1;
+                }
+                drop(guard); // New: drop the guard before sleeping!
+                thread::sleep(Duration::from_secs(1));
+            });
+        }
+    });
+    assert_eq!(n.into_inner().unwrap(), 1000);
+}
+```
+
+有了这些变化，这个程序大约仅需要 1s，因为 10 个线程现在可以同时执行 1s 的睡眠。这表明了 mutex 锁定时间保持尽可能短的重要性。将 mutex 锁定时间超过必要时间可能会完全抵消并行带来的好处，实际上会强制所有操作按顺序执行。
+
+### 锁中毒（posion）
+
+上述示例中 `unwarp()` 调用和*锁中毒*有关。
+
+当线程在持有锁时 panic，Rust 中的 mutex 将被标记为*中毒*。当这种情况发生时，Mutex 将不再被锁定，但调用它的 `lock` 方法将导致 `Err`，以表明它已经中毒。
+
+这是一个防止由 mutex 保护的数据处于不一致状态的机制。在我们上面的示例中，如果一个线程将在整数增加不到 100 之后崩溃，mutex 将释放并且整数将处于一个意外的状态，它不再是 100 的倍数，这可能打破其它线程的设定。在这种情况下，自动标记 mutex 中毒，强制用户处理这种可能。
+
+在中毒的 mutex 上调用 `lock()` 仍然可能锁定 mutex。由 `lock()` 返回的 Err 包含 `MutexGuard`，允许我们在必要时纠正不一致的状态。
+
+虽然锁中毒是一种强大的机制，在实践中，从潜在的不一致状态恢复并不常见。如果锁中毒，大多数代码要么忽略了中毒或者使用 `unwrap()` 去 panic，这有效地将 panic 传递给 mutex 的所有用户。
+
+<div style="border:medium solid green; color:green;">
+  <h2 style="text-align: center;">MutexGuard 的生命周期</h2>
+  尽管隐式 drop guard 释放 mutex 很方便，但是它有时会导致微妙的意外。如果我们使用 let 语句授任 guard 一个名字（正如我们上面的示例），看它什么时候会被丢弃相对简单，因为局部变量定义在它们作用域范围的末尾。然而，正如上述示例所示，不明确地 drop guard 可能导致 mutex 锁定的时间超过所需时间。
+
+  在不给它指定名称的情况下使用 guard 也是可能的，并且有时非常方便。因为 MutexGuard 保护数据的行为像独占引用，我们可以直接使用它，而无需首先为他授任一个名称。例如，你有一个 <code>Mutex<Vec<i32>></code>，你可以在单个语句中锁定 mutex，将项推入 Vec，并且再次锁定 mutex：
+  
+  <pre>list.lock().unwrap().push(1);</pre>
+
+  任何更大表达式产生的临时值，例如通过 <code>lock()</code> 返回的 guard，将在语句结束后被 drop。尽管这似乎显而易见，但它导致了一个常见的问题，这通常涉及 <code>match</code>、<code>if let</code> 以及 <code>while let</code> 语句。以下是遇到该陷阱的示例：
+
+  <pre>if let Some(item) = list.lock().unwrap().pop() {
+    process_item(item);
+}</pre>
+
+  如果我们的旨意就是锁定 list、弹出 item、释放 list 然后在释放 list 后处理 item，我们在这里犯了一个微妙而严重的错误。临时的 guard 直到完整的 <code>if let</code> 语句结束后才能被 drop，这意味着我们在处理 item 时不必要地持有锁。
+
+  或许，意外地是，对于类似地 <code>if</code> 语句，这并不会发生，例如以下示例：
+
+  <pre>if list.lock().unwrap().pop() == Some(1) {
+    do_something();
+}</pre>
+  
+  在这里，临时的 guard 在 <code>if</code> 语句的主题执行之前就执行 drop 了。该原因是，通常 if 语句的条件总是一个布尔值，它并不能借用任何东西。没有理由将临时的生命周期从条件开始延长到语句的结尾。对于 <code>if let</code> 语句，情况可能并非如此。例如，如果我们使用 `front()`，而不是 `pop()`，项将会从 list 中借用，因此有必要保持 guard 存在。因为借用检查实际上只是一种检查，它并不会影响何时以及什么顺序 drop，所以即使我们使用了 <code>pop()</code>，情况仍然是相同的，尽管那并不是必须的。
+
+  我们可以通过将弹出操作移动到单独的 let 语句来避免这种情况。然后在该语句的末尾放下 guard，在 <code>if let</code> 之前：
+
+  <pre>let item = list.lock().unwrap().pop();
+if let Some(item) = item {
+    process_item(item);
+}</pre>
+</div>
 
 ### 读写锁
+
+互斥锁仅涉及独占访问。MutexGuard 将提供受保护数据的一个独占引用（`&mut T`），即使我们仅想要查看数据，并且共享引用（`&T`）就足够了。
+
+读写锁是一个略微更复杂的 mutex 版本，它能够区分独占访问和共享访问的区别，并且可以提供两种访问方式。它有三种状态：释放、由单个 *writer* 锁定（用于独占访问）以及由任意数量的 reader 锁定（用于共享访问）。它通常用于通常由多个线程读取的数据，但只是偶尔一次。
+
+Rust 标准库通过 `std::sync::RwLock<T>` 类型提供该锁。它与标准库的 Mutex 工作类似，只是它的接口大多是分成两个部分。然而，单个 `lock()` 方法，它有 `read()` 和 `write()` 方法，用于为 reader 或 writer 进行锁定。它还附带了两种 guard 类型，一种用于 reader，一种用于 writer：RwLockReadGuard 和 RwLockWriteGuard。前者只实现了 Deref，其行为像受保护数据共享引用，后者还实现了 DerefMut，其行为像独占引用。
+
+它实际上是 `RefCell` 的多线程版本，动态地跟踪引用的数量以确保借用规则得到维护。
+
+`Mutex<T>` 和 `RwLock<T>` 都需要 T 是 Send，因为它们可能发送 T 到另一个线程。除此之外，`RwLock<T>` 也需要 T 实现 Sync，因为它允许多个线程对受保护的数据持有共享引用（`&T`）。（严格地说，你可以创建一个并没有实现这些需求 T 的锁定，但是你不能在线程之间共享它，因为锁本身并没有实现 Sync）。
+
+Rust 标准库仅提供一种通用的 `RwLock` 类型，但它的实现依赖于操作系统。读写锁之间有很多细微差别。当有 writer 等待时，即使当锁已经读取锁定时，很多实现将阻塞新的 reader。这样做是为了防止 *writer 挨饿*，在这种情况下，很多 reader 将共同持有锁而导致锁从不释放，从而不允许任何 writer 更新数据。
+
+<div style="border:medium solid green; color:green;">
+  <h2 style="text-align: center;">在其他语言中的互斥锁</h2>
+  Rust 标准的 Mutex 和 RwLock 类型与你在其它语言（例如 C、C++）发现的看起来有一点不同。
+
+  最大的区别是，Rust 的 <code>Mutex<T></code> 数据<i>包含</i>它正在保护的数据。例如，在 C++ 中，<code>std::mutex</code> 并不包含着它保护的数据，甚至不知道它在保护什么。这意味着，用户有指责记住哪些数据由 mutex 保护，并且确保每次访问“受保护”的数据都锁定正确的 mutex。注意，当读取其它语言涉及到 mutex 的代码，或者与不熟悉 Rust 程序员沟通时，非常有用。Rust 程序员可能讨论关于“数据在 mutex 之中”，或者说“mutex 中包裹数据”这类话，这可能让只熟悉其它语言 mutex 的程序员感到困惑。
+
+  如果你真的需要一个不包含任何内容的独立 mutex，例如，保护一些外部硬件，你可以使用 <code>Mutex<()></code>。但即使是这种情况，你最好定义一个（可能 0 大小开销）的类型来与该硬件对接，并将其包裹在 Mutex 之中。这样，在与硬件交互之前，你仍然可以强制锁定 mutex。
+</div>
 
 ## 等待: 阻塞（Park）和条件变量
 
@@ -598,6 +745,19 @@ note: required by a bound in `spawn`
 ### 条件变量
 
 ## 总结
+
+* 多线程可以并发地运行在相同程序并且可以在任意时间生成。
+* 当主线程结束，主程序结束。
+* 数据竞争是未定义行为，它会由 Rust 的类型系统完全地组织（在安全的代码中）。
+* 常规的线程可以像程序运行一样长时间，并且因此只能借用 `'static` 数据。例如静态和泄漏分配。
+* 引用计数（Arc）可以用于共享所有权，以确保只要有一个线程使用它，数据就会存在。
+* 作用域线程用于限制线程的生命周期，以允许其借用非 `'static` 数据，例如作用域变量。
+* `&T` 是*共享引用*。`&mut T` 是*独占引用*。常规类型不允许通过共享引用可变。
+* 一些类型有着内部可变性，这要归功于 `UnsafeCell`，它允许通过共享引用改变。
+* Cell 和 RefCell 是单线程内部可变性的标准类型。Atomic、Mutex 以及 RwLock 是它们多线程等价物。
+* Cell 和原子类型仅允许作为整体替换值，而 RefCell、Mutex 和 RwLock 允许你通过动态执行访问规则直接替换值。
+* 线程阻塞可以是等待某种条件的便捷方式。
+* 当条件是关于由 Mutex 保护的数据时，使用 `Condvar` 时更方便的，并且比线程阻塞更有效。
 
 [^1]: <https://zh.wikipedia.org/zh-cn/監視器_(程序同步化)>
 [^2]: <https://zh.wikipedia.org/wiki/互斥锁>
