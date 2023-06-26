@@ -9,7 +9,7 @@
   * [泄漏（Leak）](./1_Basic_of_Rust_Concurrency.md#泄漏leak)
   * [引用计数](./1_Basic_of_Rust_Concurrency.md#引用计数)
 * [借用和数据竞争](./1_Basic_of_Rust_Concurrency.md#借用和数据竞争)
-* [内部可变性](./1_Basic_of_Rust_Concurrency.md#内部可变性)（[Cell](./1_Basic_of_Rust_Concurrency.md#cell)、[RefCell](./1_Basic_of_Rust_Concurrency.md#refcell)、[互斥锁以及读写锁](./1_Basic_of_Rust_Concurrency.md#互斥锁4和读写锁5)、[Atomic](./1_Basic_of_Rust_Concurrency.md#atomic)、[UnsafeCell](./1_Basic_of_Rust_Concurrency.md#unsafecell)）
+* [内部可变性](./1_Basic_of_Rust_Concurrency.md#内部可变性)（[Cell](./1_Basic_of_Rust_Concurrency.md#cell)、[RefCell](./1_Basic_of_Rust_Concurrency.md#refcell)、[互斥锁以及读写锁](./1_Basic_of_Rust_Concurrency.md#互斥锁和读写锁)、[Atomic](./1_Basic_of_Rust_Concurrency.md#atomic)、[UnsafeCell](./1_Basic_of_Rust_Concurrency.md#unsafecell)）
 * [线程安全：Send 和 Sync](./1_Basic_of_Rust_Concurrency.md#线程安全send-和-sync)
 * [锁：互斥锁和读写锁](./1_Basic_of_Rust_Concurrency.md#锁互斥锁和读写锁)
   * [Rust 的互斥锁](./1_Basic_of_Rust_Concurrency.md#rust-的互斥锁)

@@ -140,7 +140,7 @@ impl<T> Drop for MutexGuard<'_, T> {
   <h2 style="text-align: center;">Lock API</h2>
   如果你正在计划将实现 Rust 锁当作一个新的爱好，那么你可能很快对涉及提供安全接口的样板代码感到厌烦。也就是说，UnsafeCell、Sync 实现、守护类型、Deref 实现等等。
 
-  crate.io 上的 `lock_api` 可以自动地去处理这些事情。你仅需要制作一个锁定状态的类型，并通过（不安全）`lock_api::RawMutex` trait 提供（不安全）锁定和释放功能。`lock_api::Mutex` 类型将根据你的锁实现，提供一个完全安全的和符合人体工学的 mutex 类型作为返回，包括 mutex 守护。
+  crate.io 上的 <code>lock_api</code> 可以自动地去处理这些事情。你仅需要制作一个锁定状态的类型，并通过（不安全）<code>lock_api::RawMutex</code> trait 提供（不安全）锁定和释放功能。<code>lock_api::Mutex</code> 类型将根据你的锁实现，提供一个完全安全的和符合人体工学的 mutex 类型作为返回，包括 mutex 守护。
 </div>
 
 ### 避免系统调用
@@ -264,9 +264,9 @@ fn lock_contended(state: &AtomicU32) {
 
 <div style="border:medium solid green; color:green;">
   <h2 style="text-align: center;">Cold 和 Inline 属性</h2>
-  你可以增加 `#[cold]` 属性到 `lock_contented` 函数定义，以帮助编译器理解在常见（未考虑）情况下不调用这个函数，这对 lock 方法的优化有帮助。
+  你可以增加 <code>#[cold]</code> 属性到 <code>lock_contented</code> 函数定义，以帮助编译器理解在常见（未考虑）情况下不调用这个函数，这对 <code>lock</code> 方法的优化有帮助。
 
-  额外地，你也可以增加 `#[inline]` 属性到 Mutex 和 MutexGuard 方法，以通知编译器将其内联可能是一个好主意：将生成的指令将其放置在调用方法的地方。一般来说，是否能提高性能很难说，但对于这些非常小的功能，通常如此。
+  额外地，你也可以增加 <code>#[inline]</code> 属性到 Mutex 和 MutexGuard 方法，以通知编译器将其内联可能是一个好主意：将生成的指令将其放置在调用方法的地方。一般来说，是否能提高性能很难说，但对于这些非常小的功能，通常如此。
 </div>
 
 ### 基准测试
@@ -571,9 +571,9 @@ impl Condvar {
 
   问题是，在唤醒后，所有这些线程都将立即尝试锁定相同的 mutex。更可能地是，仅有一个线程将成功，并且所有其它线程都将回到睡眠状态。很多线程都急于宣称相同资源的资源浪费问题被称为<i>惊群问题</i>。
 
-  认为 Condvar::notify_all() 是从根本上不值得优化的反模式不是没有原因的。条件变量的目的是去释放 mutex 并且当接受通知时重新锁定它，因此也许一次通知多个线程从来不是任何好主意。
+  认为 <cpde>Condvar::notify_all()</cpde> 是从根本上不值得优化的反模式不是没有原因的。条件变量的目的是去释放 mutex 并且当接受通知时重新锁定它，因此也许一次通知多个线程从来不是任何好主意。
 
-  甚至，如果我们想针对这种情况进行优化，我们可以在像 futex 这种支持<i>重新排队</i>操作的操作系统上，例如在 Linux 山的 FUTEX_REQUEUE（参见<a href="./8_Operating_System_Primitives.md">第八章“Futex 操作”</a>）
+  甚至，如果我们想针对这种情况进行优化，我们可以在像 futex 这种支持<i>重新排队</i>操作的操作系统上，例如在 Linux 山的 FUTEX_REQUEUE（参见<a href="./8_Operating_System_Primitives.html">第八章“Futex 操作”</a>）
 
   与其唤醒许多线程，一旦它们意识到锁已经被占用，除一个线程外，其它线程都将立刻回到睡眠状态，我们可以<i>重新</i>排队除一个线程外的其它所有线程，以便它们的 futex 等待操作不再等待条件变量的 counter，而是开始等待 mutex 的状态。
 
