@@ -99,11 +99,12 @@ This is my thread id: ThreadId(3)
   <h2 style="text-align: center;">输出锁定</h2>
   println 宏使用 <code>std::io::Stdout::lock()</code> 去确保输出没有被中断。<code>println!()</code> 将等待直到任意并发地运行完成后，在写入输出。如果不是这样，我们可以得到更多的交叉输出：
 
-  <p style="background:rgb(165,255,144)">Hello fromHello from another thread!
+  <pre style="background:rgb(165,255,144)">
+  Hello fromHello from another thread!
   another This is my threthreadHello fromthread id: ThreadId!
   ( the main thread.
   2)This is my thread
-  id: ThreadId(3)</p>
+  id: ThreadId(3)</pre>
 </div>
 
 与其将函数的名称传递给 `std::thread::spawn`，不如像我们上面的示例那样，传递一个*闭包*。这允许我们捕获值移动到新的线程：
