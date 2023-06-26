@@ -97,15 +97,13 @@ This is my thread id: ThreadId(3)
 
 <div style="border:medium solid green; color:green;">
   <h2 style="text-align: center;">输出锁定</h2>
-  println 宏使用 std::io::Stdout::lock() 去确保输出没有被中断。println!() 将等待直到任意并发地运行完成后，在写入输出。如果不是这样，我们可以得到更多的交叉输出：
+  println 宏使用 <code>std::io::Stdout::lock()</code> 去确保输出没有被中断。<code>println!()</code> 将等待直到任意并发地运行完成后，在写入输出。如果不是这样，我们可以得到更多的交叉输出：
 
-  <p style="background:rgb(165,255,144)">
-  Hello fromHello from another thread!
+  <p style="background:rgb(165,255,144)">Hello fromHello from another thread!
   another This is my threthreadHello fromthread id: ThreadId!
   ( the main thread.
   2)This is my thread
-  id: ThreadId(3)
-  </p>
+  id: ThreadId(3)</p>
 </div>
 
 与其将函数的名称传递给 `std::thread::spawn`，不如像我们上面的示例那样，传递一个*闭包*。这允许我们捕获值移动到新的线程：
@@ -216,13 +214,13 @@ error[E0499]: cannot borrow `numbers` as mutable more than once at a time
 
 <div style="border:medium solid green; color:green;">
   <h2 style="text-align: center;">泄漏启示录</h2>
-  在 Rust 1.0 之前，标准库有一个函数叫做 std::thread::scoped，它将直接产生一个线程，就像 std::thread::spawn。它允许无 'static 的捕获，因为它返回的不是 JoinGuard，而是当被 drop 时 join 到线程的 JoinGuard。任意的借用数据仅需要比这个 JoinGuard 活得更久。只要 JoinGuard 在某个时候被 drop，这似乎是安全的。
+  在 Rust 1.0 之前，标准库有一个函数叫做 <code>std::thread::scoped</code>，它将直接产生一个线程，就像 <code>std::thread::spawn</code>。它允许无 <code>'static</code> 的捕获，因为它返回的不是 JoinGuard，而是当被 drop 时 join 到线程的 JoinGuard。任意的借用数据仅需要比这个 JoinGuard 活得更久。只要 JoinGuard 在某个时候被 drop，这似乎是安全的。
 
   就在 Rust 1.0 发布之前，人们慢慢发现它似乎不能保证某些东西被 drop。有很多种方式没有 drop 它，例如创建一个引用计数节点的循环，可以忘记某些东西或者*泄漏*它。
 
-  最终，在一些人提及的“泄漏启示录”中得到结论，（安全）接口的设计不能依赖假设对象总是在它们的生命周期结束后 drop。泄漏一个对象可能会导致泄漏更多对象（例如，泄漏一个 Vec 将也导致泄漏它的元素），但它并不会导致未定义行为（undefind behavior）[^6]。因此，std::thread::scoped 将不再视为安全的并从标准库移除。此外，std::mem::forget 从一个不安全的函数升级到*安全*的函数，以强调忘记（或泄漏）总是一种可能性。
+  最终，在一些人提及的“泄漏启示录”中得到结论，（安全）接口的设计不能依赖假设对象总是在它们的生命周期结束后 drop。泄漏一个对象可能会导致泄漏更多对象（例如，泄漏一个 Vec 将也导致泄漏它的元素），但它并不会导致未定义行为（undefind behavior）[^6]。因此，std::thread::scoped 将不再视为安全的并从标准库移除。此外，<code>std::mem::forget</code> 从一个不安全的函数升级到*安全*的函数，以强调忘记（或泄漏）总是一种可能性。
 
-  直到后来，在 Rust 1.63 中，添加了一个新的 std::thread::scope 功能，其新设计不依赖 Drop 来获得正确性。
+  直到后来，在 Rust 1.63 中，添加了一个新的 <code>std::thread::scope</code> 功能，其新设计不依赖 Drop 来获得正确性。
 </div>
 
 ## 共享所有权以及引用计数
@@ -389,10 +387,9 @@ fn f(a: &i32, b: &mut i32) {
 
   作为一个具体的例子，让我们看看在切片上使用 <code>get_unchecked</code> 方法的小片段：
 
-  <pre>
-let a = [123, 456, 789];
-let b = unsafe { a.get_unchecked(index) };
-  </pre>
+  <pre>let a = [123, 456, 789];
+let b = unsafe { a.get_unchecked(index) };</pre>
+
   <code>get_unchecked</code> 方法给我们一个给定索引的切片元素，就像 <code>a[index]</code>，但是允许变异器假设索引总是在边界，没有任何检查。
 
   这意味着，在代码片段中，由于 a 的长度是 3，编译器可能假设索引小雨 3。这使我们确保其假设成立。
@@ -479,13 +476,13 @@ fn f(v: &RefCell<Vec<i32>>) {
 
 尽管 Cell 和 RefCell 有时是非常有用的，但是当我们使用多线程的时候，它们会变得无用。所以让我们继续讨论与并发相关的类型。
 
-### 互斥锁[^4]和读写锁[^5]
+### 互斥锁和读写锁
 
-*读写锁*（RwLock）是 `RefCell` 的并发版本。`RwLock<T>` 持有 T 并且跟踪任意未解除的借用。然而，与 RefCell 不同，它在冲突借用中不会 panic。相反，它会阻塞当先线程——使它进入睡眠——直到冲突借用消失才会唤醒。在其它线程完成后，我们仅需要耐心的等待轮到我们处理数据。
+*读写锁*（RwLock）[^5]是 `RefCell` 的并发版本。`RwLock<T>` 持有 T 并且跟踪任意未解除的借用。然而，与 RefCell 不同，它在冲突借用中不会 panic。相反，它会阻塞当先线程——使它进入睡眠——直到冲突借用消失才会唤醒。在其它线程完成后，我们仅需要耐心的等待轮到我们处理数据。
 
 借用 RwLock 的内容称为*锁*。通过锁定它，我们临时阻塞并发的冲突借用，这允许我们没有导致数据竞争的借用它。
 
-`Mutex` 是非常相似的，但是概念上是简单的。它不像 RwLock 跟踪共享借用和独占借用的数量，它仅允许独占借用。
+`Mutex`[^4] 与其是非常相似的，但是概念上相对简单的。它不像 RwLock 跟踪共享借用和独占借用的数量，它仅允许独占借用。
 
 我们将在[“锁：互斥锁和读写锁”](#锁互斥锁和读写锁)更详细地介绍这些类型。
 
@@ -687,7 +684,7 @@ fn main() {
   <h2 style="text-align: center;">MutexGuard 的生命周期</h2>
   尽管隐式 drop guard 释放 mutex 很方便，但是它有时会导致微妙的意外。如果我们使用 let 语句授任 guard 一个名字（正如我们上面的示例），看它什么时候会被丢弃相对简单，因为局部变量定义在它们作用域范围的末尾。然而，正如上述示例所示，不明确地 drop guard 可能导致 mutex 锁定的时间超过所需时间。
 
-  在不给它指定名称的情况下使用 guard 也是可能的，并且有时非常方便。因为 MutexGuard 保护数据的行为像独占引用，我们可以直接使用它，而无需首先为他授任一个名称。例如，你有一个 <code>Mutex<Vec<i32>></code>，你可以在单个语句中锁定 mutex，将项推入 Vec，并且再次锁定 mutex：
+  在不给它指定名称的情况下使用 guard 也是可能的，并且有时非常方便。因为 MutexGuard 保护数据的行为像独占引用，我们可以直接使用它，而无需首先为他授任一个名称。例如，你有一个 <code>Mutex&lt;Vec&lt;i32&gt;&gt;</code>，你可以在单个语句中锁定 mutex，将项推入 Vec，并且再次锁定 mutex：
   
   <pre>list.lock().unwrap().push(1);</pre>
 
@@ -733,9 +730,9 @@ Rust 标准库仅提供一种通用的 `RwLock` 类型，但它的实现依赖�
   <h2 style="text-align: center;">在其他语言中的互斥锁</h2>
   Rust 标准的 Mutex 和 RwLock 类型与你在其它语言（例如 C、C++）发现的看起来有一点不同。
 
-  最大的区别是，Rust 的 <code>Mutex<T></code> 数据<i>包含</i>它正在保护的数据。例如，在 C++ 中，<code>std::mutex</code> 并不包含着它保护的数据，甚至不知道它在保护什么。这意味着，用户有指责记住哪些数据由 mutex 保护，并且确保每次访问“受保护”的数据都锁定正确的 mutex。注意，当读取其它语言涉及到 mutex 的代码，或者与不熟悉 Rust 程序员沟通时，非常有用。Rust 程序员可能讨论关于“数据在 mutex 之中”，或者说“mutex 中包裹数据”这类话，这可能让只熟悉其它语言 mutex 的程序员感到困惑。
+  最大的区别是，Rust 的 <code>Mutex&lt;T&gt;</code> 数据<i>包含</i>它正在保护的数据。例如，在 C++ 中，<code>std::mutex</code> 并不包含着它保护的数据，甚至不知道它在保护什么。这意味着，用户有指责记住哪些数据由 mutex 保护，并且确保每次访问“受保护”的数据都锁定正确的 mutex。注意，当读取其它语言涉及到 mutex 的代码，或者与不熟悉 Rust 程序员沟通时，非常有用。Rust 程序员可能讨论关于“数据在 mutex 之中”，或者说“mutex 中包裹数据”这类话，这可能让只熟悉其它语言 mutex 的程序员感到困惑。
 
-  如果你真的需要一个不包含任何内容的独立 mutex，例如，保护一些外部硬件，你可以使用 <code>Mutex<()></code>。但即使是这种情况，你最好定义一个（可能 0 大小开销）的类型来与该硬件对接，并将其包裹在 Mutex 之中。这样，在与硬件交互之前，你仍然可以强制锁定 mutex。
+  如果你真的需要一个不包含任何内容的独立 mutex，例如，保护一些外部硬件，你可以使用 <code>Mutex&lt;()&gt;</code>。但即使是这种情况，你最好定义一个（可能 0 大小开销）的类型来与该硬件对接，并将其包裹在 Mutex 之中。这样，在与硬件交互之前，你仍然可以强制锁定 mutex。
 </div>
 
 ## 等待: 阻塞（Park）和条件变量
