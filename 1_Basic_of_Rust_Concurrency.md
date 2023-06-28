@@ -497,7 +497,7 @@ fn f(v: &RefCell<Vec<i32>>) {
 
 ### UnsafeCell
 
-`UnsafeCell` 是内部可变性的原始构建块。
+`UnsafeCell` 是内部可变性的原始基石。
 
 `UnsafeCell<T>` 包裹 T，但是没有附带任何条件和限制来避免未定义行为。相反，它的 `get()` 方法仅是给出了它包装值的原始指针，该值仅可以在 `unsafe` 块中使用。它以用户不会导致任何未定义行为的方式使用它。
 
