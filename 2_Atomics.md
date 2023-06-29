@@ -232,9 +232,168 @@ fetch_add 操作从 100 增加到 123，但是返回给我们还是旧值 100。
 
 ### 示例：来自多线程的进度报道
 
+在[“示例：进度报道”](#示例进度报道)中，我们使用一个 AtomicUsize 去报道后台线程的进度。如果我们把工作分开，例如，四个线程，每个处理 25 个项目，我们将需要知道所有 4 个线程的进度。
+
+我们可以为每个线程使用单独的 AtomicUsize 并且在主线程加载它们并进行汇总，但是更简单的解决方案是，使用单个 AtomicUsize 去跟踪所有线程处理项的总数。
+
+为了使其工作，我们不再使用 store 方法，因为这会覆盖其他线程的进度。而是，我们可以使用原子加操作为每个处理项之后增加计数器。
+
+```rust
+fn main() {
+    let num_done = &AtomicUsize::new(0);
+
+    thread::scope(|s| {
+        // Four background threads to process all 100 items, 25 each.
+        for t in 0..4 {
+            s.spawn(move || {
+                for i in 0..25 {
+                    process_item(t * 25 + i); // Assuming this takes some time.
+                    num_done.fetch_add(1, Relaxed);
+                }
+            });
+        }
+
+        // The main thread shows status updates, every second.
+        loop {
+            let n = num_done.load(Relaxed);
+            if n == 100 { break; }
+            println!("Working.. {n}/100 done");
+            thread::sleep(Duration::from_secs(1));
+        }
+    });
+
+    println!("Done!");
+}
+```
+
+一些东西已经改变。更重要地是，我们现在产生了 4 个后台线程而不是 1 个，并且使用 fetch_add 而不是 store 去修改 `num_done` 原子变量。
+
+更巧妙地是，我们现在对后台线程使用一个 move 闭包，并且 num_done 现在是一个引用。这与我们使用 fetch_add 无关，而是我们如何在循环中产生 4 个线程有关。此闭包捕获 t，以了解它是 4 个线程中的哪一个，因此是否从项目 0、25、50 或 75 开始。没有 move 关键字，闭包将尝试通过引用捕获 t。这是不允许的，因为它仅在循环期间短暂存在。
+
+由于 move 闭包，它移动（或复制）它的捕获而不是借用它们，这使它得到 t 的复制。因为它也捕获 num_done，我们已经改变该变量为一个引用，因为我们仍然想要借用相同的 AtomicUsize。注意，原子类型并没有实现 Copy trait，所以如果我们尝试移动一个到多个线程，我们将得到错误。
+
+撇开闭包的微妙不谈，在这里使用 fetch_add 更改是非常简单的。我们并不知道线程将以哪种顺序增加 num_done，但由于加法是原子的，我们并不担心任何事情，并且当所有线程完成，可以确信它将是 100。
+
 ### 示例：统计数据
 
+继续通过原子报道其他线程正在做什么的概念，让我们拓展我们的示例，也可以收集和报道一些处理项目所花费的统计数据。
+
+在 num_done 旁边，我们增加了两个原子变量 `total_time` 和 `max_time`，以便跟踪处理项目所花费的时间。我们将使用这些报道平均和峰值处理时间。
+
+```rust
+fn main() {
+    let num_done = &AtomicUsize::new(0);
+    let total_time = &AtomicU64::new(0);
+    let max_time = &AtomicU64::new(0);
+
+    thread::scope(|s| {
+        // Four background threads to process all 100 items, 25 each.
+        for t in 0..4 {
+            s.spawn(move || {
+                for i in 0..25 {
+                    let start = Instant::now();
+                    process_item(t * 25 + i); // Assuming this takes some time.
+                    let time_taken = start.elapsed().as_micros() as u64;
+                    num_done.fetch_add(1, Relaxed);
+                    total_time.fetch_add(time_taken, Relaxed);
+                    max_time.fetch_max(time_taken, Relaxed);
+                }
+            });
+        }
+
+        // The main thread shows status updates, every second.
+        loop {
+            let total_time = Duration::from_micros(total_time.load(Relaxed));
+            let max_time = Duration::from_micros(max_time.load(Relaxed));
+            let n = num_done.load(Relaxed);
+            if n == 100 { break; }
+            if n == 0 {
+                println!("Working.. nothing done yet.");
+            } else {
+                println!(
+                    "Working.. {n}/100 done, {:?} average, {:?} peak",
+                    total_time / n as u32,
+                    max_time,
+                );
+            }
+            thread::sleep(Duration::from_secs(1));
+        }
+    });
+
+    println!("Done!");
+}
+```
+
+后台线程现在使用 `Install::now()` 和 `Install::elapsed()` 去衡量它们在 `process_item()` 所花费的时间。原子的增加操作用于将微秒数增加到 total_time，并且原子的 max 操作用于跟踪 max_time 中的最高测量值。
+
+主线程将总时间除以处理器项目的数量以获取平均处理时间，然后将它与 max_time 的峰值时间一起报道。
+
+由于三个原子变量是单独更新的，因此主线程可能在线程增加 num_done 后加载值，但在更新 total_time 之前，导致低估了平均值。更微妙的是，因为 Relaxed 内存排序不能保证从另一个线程中看到操作的相对顺序，它甚至可能看到 total_time 新更新的值，同时仍然看到 num_done 的旧值，导致平均值的高估。
+
+在我们的示例中，这两个都不是大问题。最糟糕的情况是向用户提交了不准确的平均值。
+
+如果我们想要避免这个，我们可以把这三个统计数据放到一个 Mutex 中。然后，在更新三个数字时，我们短暂地锁定 mutex，这三个数字不再是原子的。这有效地转变三次更新为单个原子操作，代价是锁定和释放 mutex，并且可能临时地阻塞线程。
+
 ### 示例：ID 分配
+
+让我们转到一个用例，我们实际上需要 `fetch_add` 的返回值。
+
+假设我们需要一些函数，`allocate_new_id()`，每次调用它时，都会给出新的唯一的数字。我们可能使用这些数字标识程序中的任务或其它事情；需要一个小而易于存储和在线程之间传递的东西来唯一标识事物，例如整数。
+
+使用 `fetch_add` 实现此函数是轻松的：
+
+```rust
+use std::sync::atomic::AtomicU32;
+
+fn allocate_new_id() -> u32 {
+    static NEXT_ID: AtomicU32 = AtomicU32::new(0);
+    NEXT_ID.fetch_add(1, Relaxed)
+}
+```
+
+我们只是跟踪了*下一个*要给出的数字，并在每次加载时增加它。第一个调用者将得到 0，第二个调用者将得到 1，以此类推。
+
+这里唯一的问题是溢出时包装行为。第 4,294,967,296 次调用将溢出 32 位整数，因此下一次调用将再次返回 0。
+
+这是否是一个问题取决于用例：经常被这样调用的可能性是多大，如果数字不是唯一的，最糟糕的情况是什么？虽然这似乎是一个巨大的数字，现代计算机可以在几秒内的轻松执行我们的函数。如果内存安全取决于这些数字的唯一性，那么我们上面的实现是不可接受的。
+
+为了解决这个，如果调用太多次，我们可以试图去使函数 panic，例如这样：
+
+```rust
+// This version is problematic.
+fn allocate_new_id() -> u32 {
+    static NEXT_ID: AtomicU32 = AtomicU32::new(0);
+    let id = NEXT_ID.fetch_add(1, Relaxed);
+    assert!(id < 1000, "too many IDs!");
+    id
+}
+```
+
+现在，assert 语句将在 1000 次调用后 panic。然而，这发生在原子加操作已经发生后，这意味着当我们 panic 时，`NEXT_ID` 已经增加到 1001。如果另一个线程在之后调用该函数，它将在 panic 之前增加到 1002，以此类推。虽然需要很长时间，我们将在 4,294,966,296 panic 过后遇到相同的问题，NEXT_ID 将再次溢出到 0。
+
+有三个通常的方式解决这个问题。第一种是不使用 panic，而是完全在溢出时终止进程。`std::process::abort` 函数将终止整个函数，排除任何继续调用我们函数的可能性。尽管中断进程可能需要短暂的时间，但是函数仍然可能通过其它线程调用，但在程序真正的终止之前，发生数十亿次调用的机会可以忽略不计。
+
+事实上，在标准库中的 `Arc::clone()` 溢出检查时这么实现的，以防你在某种方式下克隆 `isize::MAX` 次。在 64 位计算机上，这需要上百年的时间，但如果 isize 只有 32 位，这仅需要几秒钟。
+
+处理溢出的第二种方法是使用 fetch_sub 在 panic 之前再次减少计数器，就像这样：
+
+```rust
+fn allocate_new_id() -> u32 {
+    static NEXT_ID: AtomicU32 = AtomicU32::new(0);
+    let id = NEXT_ID.fetch_add(1, Relaxed);
+    if id >= 1000 {
+        NEXT_ID.fetch_sub(1, Relaxed);
+        panic!("too many IDs!");
+    }
+    id
+}
+```
+
+当多个线程在相同时间执行这个函数，计数器仍然有可能在非常短暂的时间超过 100，但这受到活动线程数量的限制。合理地假设是永远不会有数十亿个激活的线程，并非所有线程都在 fetch_add 和 fetch_sub 之间的短暂时间内同时执行相同的函数。
+
+这就是处理标准库 `thread::scope` 实现中运行线程数量溢出的方式。
+
+第三种处理溢出的方式可以说是唯一正确的方式，因为如果它溢出，它完全可以阻止加操作发生。然而，我们不能使用迄今为止看到的原子操作实现这一点。为此，我们需要 `compare-and-exchange` 操作，接下来我们将探索。
 
 ## compare-and-exchange 操作
 
