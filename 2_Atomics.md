@@ -10,7 +10,7 @@
 
 与大多数类型不同，它们允许通过共享引用进行修改（例如，`&AtomicU8`）。正如[第一章“内部可变性”](./1_Basic_of_Rust_Concurrency.md#内部可变性)讨论的那样，这都要归功于它。
 
-每一个可用的原子类型都有着相同的接口，包括存储（store）和加载（load）、原子“获取和修改（fetch-and-modify）”操作方法、和一些更高级的“比较和交换（compare-and-exchange）”方法。我们将在这章节的后半部分讨论它们。
+每一个可用的原子类型都有着相同的接口，包括存储（store）和加载（load）、原子“获取并修改（fetch-and-modify）”操作方法、和一些更高级的“比较并交换（compare-and-exchange）[^4]”方法。我们将在这章节的后半部分讨论它们。
 
 但是，在我们研究不同原子操作之前，我们需要简要谈谈叫做*内存排序*[^1]的概念：
 
@@ -226,7 +226,7 @@ fetch_add 操作从 100 增加到 123，但是返回给我们还是旧值 100。
 
 需要记住的一个重要的事情是，fetch_add 和 fetch_sub 为溢出实现了包装行为。将值增加超过最大可表示值将包裹起来，并导致最小可表示值。这与常规整数上的增加和减少行为是不同的，后者调试模式下的溢出将 panic。
 
-在[“compare-and-exchange 操作”](#compare-and-exchange-操作)中，我们将看见如何使用溢出检查做原子加法。
+在[“比较并交换操作”](#比较并交换操作)中，我们将看见如何使用溢出检查做原子加法。
 
 但首先，让我们看看这些方法的现实使用示例。
 
@@ -393,13 +393,146 @@ fn allocate_new_id() -> u32 {
 
 这就是处理标准库 `thread::scope` 实现中运行线程数量溢出的方式。
 
-第三种处理溢出的方式可以说是唯一正确的方式，因为如果它溢出，它完全可以阻止加操作发生。然而，我们不能使用迄今为止看到的原子操作实现这一点。为此，我们需要 `compare-and-exchange` 操作，接下来我们将探索。
+第三种处理溢出的方式可以说是唯一正确的方式，因为如果它溢出，它完全可以阻止加操作发生。然而，我们不能使用迄今为止看到的原子操作实现这一点。为此，我们需要比较并交换操作，接下来我们将探索。
 
-## compare-and-exchange 操作
+## 比较并交换操作
+
+更加高级和灵活的原子操作是*比较并交换*操作。这个操作检查是否原子值等同于给定的值，只有在这种情况下，它才以原子地方式使用新值替换它，作为单个操作完成。它会返回先前的值，并告诉我们是否进行了替换。
+
+它的签名比我们到目前为止看到的要复杂一些。以 AtomicI32 为例，它看起来像这样：
+
+```rust
+impl AtomicI32 {
+    pub fn compare_exchange(
+        &self,
+        expected: i32,
+        new: i32,
+        success_order: Ordering,
+        failure_order: Ordering
+    ) -> Result<i32, i32>;
+}
+```
+
+暂时忽略内存排序，它基本上与以下实现相同，只是这一切都发生在单个不可分割原子操作上：
+
+```rust
+impl AtomicI32 {
+    pub fn compare_exchange(&self, expected: i32, new: i32) -> Result<i32, i32> {
+        // In reality, the load, comparison and store,
+        // all happen as a single atomic operation.
+        let v = self.load();
+        if v == expected {
+            // Value is as expected.
+            // Replace it and report success.
+            self.store(new);
+            Ok(v)
+        } else {
+            // The value was not as expected.
+            // Leave it untouched and report failure.
+            Err(v)
+        }
+    }
+}
+```
+
+使用这个，我们可以从原子变量中加载值，执行我们喜欢的任何计算，并且然后仅原子变量在此期间没有改变值的情况下，再存储新的计算值。如果我们把这个放在一个循环中重试，如果它确实发生了变化，我们可以使用它来实现所有其它原子操作，使它成为最通用的一个。
+
+为了演示，让我们在不使用 `fetch_add` 的情况下将 AtomicU32 增加一个，仅是为了看看 compare_exchange 是如何使用的：
+
+```rust
+fn increment(a: &AtomicU32) {
+    let mut current = a.load(Relaxed); // 1
+    loop {
+        let new = current + 1; // 2
+        match a.compare_exchange(current, new, Relaxed, Relaxed) { // 3
+            Ok(_) => return, // 4
+            Err(v) => current = v, // 5
+        }
+    }
+}
+```
+
+1. 首先，我们加载 a 的当前值。
+2. 我们计算我们想要存储在 a 的新值，而不考虑其他线程的并发修改。
+3. 我们使用 compare_exchange 去更新 a 的值，但*仅*当它的值仍然与我们之前加载的值相同时。
+4. 如果 a 确实和之前一样，它现在被我们的新值所取代，我们就完成了。
+5. 如果 a 并不和之前相同，那么自从我们加载它以来，它一定短时间被另一个线程改变了。compare_exchange 操作给我门提供了 a 的改变值，并且我们将再次尝试使用该值。加载和更新之间的时间非常短暂，它不可能循环超过几次迭代。
+
+> 如果原子变量从某个值更改 A 到 B，并且在加载操作之后，返回 A，但在 compare_exchange 操作之前，它仍然会成功，即使原子变量在此期间被更改（并且更改回来）。在很多示例中，就像在我们的加法示例中一样，这并不是一个问题。然而，有几种算法，通常涉及原子指针，这被称为 ABA 问题。
+
+在 `compare_exchange` 旁边，有一个名为 `compare_exchange_weak` 的类似方法。区别是 weak 版本有时可能仍然不变的值并且返回 Err，即使原子值匹配期待值。在某些平台，这个方法可以更有效地实现，并且对于虚假的比较和交换失败的后果不重要的情况下，比如上面的递增函数，应该优先使用它。在[第七章节](./7_Understanding_the_Processor.md)，我们将深入研究底层细节，以找出为什么 weak 版本会更有效。
 
 ### 示例：没有溢出的 ID 分配
 
+现在，从[“示例：ID 分配”](#示例id-分配)中回到 `allocate_new_id()` 的溢出问题。
+
+为了停止增加 NEXT_ID 超过某个限制以阻止溢出，我们可以使用 compare_exchange 去实现具有上限的原子操作加法。使用这个想法，让我们制作一个 allocate_new_id 的版本，该版本始终正确处理溢出，即使在几乎不可能的情况下也是如此：
+
+```rust
+fn allocate_new_id() -> u32 {
+    static NEXT_ID: AtomicU32 = AtomicU32::new(0);
+    let mut id = NEXT_ID.load(Relaxed);
+    loop {
+        assert!(id < 1000, "too many IDs!");
+        match NEXT_ID.compare_exchange_weak(id, id + 1, Relaxed, Relaxed) {
+            Ok(_) => return id,
+            Err(v) => id = v,
+        }
+    }
+}
+```
+
+现在，我们在修改 NEXT_ID 之前，检查并 panic，保证它将从不增加超出 1000，使溢出变得不可能。如果我们愿意，我们现在可以将上限从 1000 提高到 `u32::MAX`，而不必担心它可能会超过极限的边缘情况。
+
+<div style="border:medium solid green; color:green;">
+  <h2 style="text-align: center;">Fetch-Update</h2>
+  原子类型有一个名为 `fetch_update` 的方便方法，用于比较并交换循环模式。它相当于加载操作，然后就是重复计算和 <code>compare_exchange_weak</code> 的循环，就像我们上面做的那样。
+
+  使用它，我们可以使用一行诗心啊我们的 allocate_new_id：
+  
+  <pre>
+  NEXT_ID.fetch_update(Relaxed, Relaxed,
+      |n| n.checked_add(1)).expect("too many IDs!")</pre>
+  
+  有关详细信息，请查看该方法的文档。
+
+  我们不会在本书中使用 <code>fetch_update</code> 方法，因此我们可以专注于单个原子操作。
+  </div>
+
 ### 示例：惰性一次性初始化
+
+在[“示例：惰性初始化”](#示例惰性初始化)中，我们查看常量值的惰性初始化示例。我们做了一个函数，在第一次调用时懒惰地初始化一个值，但在以后的调用中重用它。当多个线程并发地运行这个函数，多个线程可能执行初始化，并且它们将以不可预期的顺序覆盖彼此的结果。
+
+对于我们期望值是常量，或者当我们不关心改变值时，这很好。然而，也有些用例，这些值每次都会初始化不同的值，即使我们需要在程序的一次运行中返回相同的值。
+
+例如，想象一个函数 `get_key()`，它返回一个随机生成的密钥，该密钥仅在程序每次运行时生成。它可能是用于与程序通信的加密密钥，该密钥每次运行程序时都需要是唯一的，但在进程中保持不变。
+
+这意味着我们不能在生成密钥之后，简单地使用一个 store 操作，因为这可能仅在片刻之后由其他线程复写这个生成的密钥，导致两个线程使用不同的密钥。相反，我们可以使用 compare_exchange 去确保我们仅当没有其他线程完成该操作，去存储这个密钥，否则，扔掉我们的密钥，改用存储的密钥。
+
+```rust
+fn get_key() -> u64 {
+    static KEY: AtomicU64 = AtomicU64::new(0);
+    let key = KEY.load(Relaxed);
+    if key == 0 {
+        let new_key = generate_random_key(); // 1
+        match KEY.compare_exchange(0, new_key, Relaxed, Relaxed) { // 2
+            Ok(_) => new_key, // 3
+            Err(k) => k, // 4
+        }
+    } else {
+        key
+    }
+}
+```
+
+1. 我们仅在 KEY 仍然没有初始化时，生成一个新的密钥。
+2. 我们用新生成的密钥替换 KEY，但前提是它仍然是 0。
+3. 如果我们将 0 换成新密钥，我们将返回新生成的密钥。`get_key()` 的新调用将返回现在存储在 KEY 中的相同新密钥。
+4. 如果我们输给了另一个初始化 KEY 的线程，我们忘记我们的新密钥，而是使用来自 KEY 的密钥。
+
+这是一个很好的例子，例如 `compare_exchange` 比 `weak` 变体更合适。我们不会在循环中运行比较和交换操作，如果操作虚假失败，我们不想返回 0。
+
+正如[“示例：惰性初始化”](#示例惰性初始化)中提到的，如果 `generate_random_key()` 需要大量时间，那么在初始化期间阻塞线程可能更有意义，以避免可能花费时间生成不会使用的密钥。Rust 标准库通过 `std::sync::Once` 和 `std::sync::OnceLock` 提供此类功能。
 
 ## 总结
 
@@ -411,9 +544,10 @@ fn allocate_new_id() -> u32 {
 * 我们可以使用竞争条件[^2]来惰性始化，而不会引发数据竞争[^3]。
 * 获取并修改操作允许进行一小组基本的原子修改操作，当多个线程同时修改同一个院子变量时，非常有用。
 * 原子加法和减法在溢出时会默默地进行环绕（wrap around）操作。
-* compare-and-exchange 操作是最灵活和通用的，并且是任意其它原子操作的基石。
-* *weak* compare-and-exchange 稍微更有效。
+* 比较并交换操作是最灵活和通用的，并且是任意其它原子操作的基石。
+* *weak* 比较并交换稍微更有效。
 
 [^1]: <https:·//zh.wikipedia.org/wiki/内存排序>
 [^2]: 竞争条件是指多个线程并发访问和修改共享数据时，其最终结果依赖于线程执行的具体顺序。在某些情况下，我们可以利用竞争条件来实现延迟初始化。也就是说，多个线程可以同时尝试对共享资源进行初始化，但只有第一个成功的线程会完成初始化，而其他线程会放弃初始化操作。
 [^3]: 数据竞争是指多个线程同时访问共享数据，并且至少有一个线程进行写操作，而没有适当的同步机制来保证正确的访问顺序。
+[^4]: <https://zh.wikipedia.org/wiki/比较并交换>
