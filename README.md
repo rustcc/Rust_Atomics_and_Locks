@@ -1,5 +1,3 @@
-# Rust Atomics and Locks
-
 ## [第一章：Rust 并发基础](./1_Basic_of_Rust_Concurrency.md)
 
 * [Rust 中的线程](./1_Basic_of_Rust_Concurrency.md#rust-中的线程)

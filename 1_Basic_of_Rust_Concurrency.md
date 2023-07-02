@@ -73,7 +73,7 @@ fn main() {
 }
 ```
 
-`.join()` 方法等待直到线程结束执行并且返回 `std::thread::Result`。如果线程由于 panic 不能成功地完成它的函数，这将包含 panic 消息。我们试图去处理这种情况，或者在 join panic 线程仅调用 `.unwrap()` 去 panic。
+`.join()` 方法等待直到线程结束执行并且返回 `std::thread::Result`。如果线程由于 panic 不能成功地完成它的函数，这将包含 panic 消息。我们试图去处理这种情况，或者为 join panic 的线程调用 `.unwrap()` 去 panic。
 
 运行我们程序的这个版本，将不再导致截断的输出：
 
@@ -99,7 +99,7 @@ This is my thread id: ThreadId(3)
   <h2 style="text-align: center;">输出锁定</h2>
   println 宏使用 <code>std::io::Stdout::lock()</code> 去确保输出没有被中断。<code>println!()</code> 将等待直到任意并发地运行完成后，在写入输出。如果不是这样，我们可以得到更多的交叉输出：
 
-  <pre style="background:rgb(165,255,144)">
+  <pre>
   Hello fromHello from another thread!
   another This is my threthreadHello fromthread id: ThreadId!
   ( the main thread.
