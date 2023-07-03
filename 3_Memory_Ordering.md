@@ -72,7 +72,7 @@ Rust 的内存模型，它更多的抄自 C++，与任何现有的处理器架�
 
 基础的 happens-before 规则是同一线程内的任何事情都按顺序发生。如果线程线程正在执行 `f(); g();`，那么 `f()` 在 `g()` 之前发生。
 
-然而，在线程之间，发生在特定的情况下的 happens-before 关系笔记哦啊有限，例如，在创建和等待线程时，释放和锁定 mutex，以及使用非 relaxed 的原子操作。Relaxed 内存排序时最基本的（也是性能最好的）内存排序，它本身并不会导致任何跨线程的 happens-before 关系。
+然而，在线程之间，发生在特定的情况下的 happens-before 关系笔记哦啊有限，例如，在创建和等待线程时，解锁和锁定 mutex，以及使用非 relaxed 的原子操作。Relaxed 内存排序时最基本的（也是性能最好的）内存排序，它本身并不会导致任何跨线程的 happens-before 关系。
 
 为了探索这意味着什么，让我们看看以下示例，我们假设 a 和 b 有不同的线程并发执行：
 
@@ -211,9 +211,206 @@ fn main() {
 
 ## Release 和 Acquire 排序
 
-### 示例：「锁」
+*Release* 和 *Acquire* 内存排序通常成对使用，它们用于形成线程之间的 happens-before 关系。`Release` 内存排序适用于 store 操作，而 `Acquire` 内存排序适用于 load 操作。
+
+当 acquire-load 操作观察 release-store 操作的结果时，就会形成 happens-before 关系。在这种情况下，store 操作极其之前的所有操作在时间上先于 load 操作和之后的所有操作。
+
+当使用 Acquire 进行「获取和修改」或者「比较和交换」操作时，它仅适用于操作的 load 部分。类似地，Release 仅适用于操作的 store 部分。`AcqRel` 用于表示 Acquire 和 Release 的组合，这既能使 load 使用 Acquire，也能使 store 使用 Release。
+
+让我们回顾一个示例，看看我们在实践中如何使用它们。在以下示例中，我们将一个 64 位整数从产生的线程发送到主线程。我们使用一个额外的原子布尔类型以指示主线程，整数已经被存储并且已经可以读取：
+
+```rust
+use std::sync::atomic::Ordering::{Acquire, Release};
+
+static DATA: AtomicU64 = AtomicU64::new(0);
+static READY: AtomicBool = AtomicBool::new(false);
+
+fn main() {
+    thread::spawn(|| {
+        DATA.store(123, Relaxed);
+        READY.store(true, Release); // Everything from before this store ..
+    });
+    while !READY.load(Acquire) { // .. is visible after this loads `true`.
+        thread::sleep(Duration::from_millis(100));
+        println!("waiting...");
+    }
+    println!("{}", DATA.load(Relaxed));
+}
+```
+
+当产生的线程完成数据存储时，它使用 release-store 去设置 `READY` 标志为真。当主线程通过它的 acquire-load 操作观察到，在这两个线程之间建立了一个 happens-before 关系，正如图 3-3 所示。此时，我们肯定知道在 release-store 到 READY 之前的所有操作对发生在 acquire-load 之后的所有操作都可见。具体而言，当主线程从 `DATA` 加载时，我们可以肯定它将加载由后台线程存储的值。该程序在最后一行只有一种输出结果：123。
+
+![ ](./picture/raal_0303.png)
+
+图 3-3。示例代码中原子操作之间的 happens-before 关系，展示了通过 acquire 和 release 操作形成的跨线程关系。
+
+如果我们在这个示例为所有操作使用 relaxed 内存排序，主线程可能会看到 `READY` 翻转为 true，而之后仍然从 DATA 中加载 0。
+
+> “Release”和“Acquire”的名称基于它们最基本用例：一个线程通过原子地存储一些值到原子变量来发布数据，而另一个线程通过原子地加载这个值来获取数据。这正是当我们解锁（释放）互斥体并随后在另一个线程上锁定（获取）它时发生的情况。
+
+在我们的示例中，来自 READY 标志的 happens-before 关系保证了 DATA 的 store 和 load 操作不能并发地发生。这意味着我们实际上不需要这些操作是原子的。
+
+然而，如果我们仅是为我们的数据变量尝试去使用常规的非原子类型，编译器将拒绝我们的程序，因为当另一个线程也在借用它们，Rust 的类型系统不允许我们修改它们。类型系统不会理解我们在这里创建的 happens-before 关系。一些不安全的代码是必要的，以向编译器承诺我们已经仔细考虑过这个问题，我们确信我们没有违反任何规则，如下所示：
+
+```rust
+static mut DATA: u64 = 0;
+static READY: AtomicBool = AtomicBool::new(false);
+
+fn main() {
+    thread::spawn(|| {
+        // Safety: Nothing else is accessing DATA,
+        // because we haven't set the READY flag yet.
+        unsafe { DATA = 123 };
+        READY.store(true, Release); // Everything from before this store ..
+    });
+    while !READY.load(Acquire) { // .. is visible after this loads `true`.
+        thread::sleep(Duration::from_millis(100));
+        println!("waiting...");
+    }
+    // Safety: Nothing is mutating DATA, because READY is set.
+    println!("{}", unsafe { DATA });
+}
+```
+
+<div style="border:medium solid green; color:green;">
+  <h2 style="text-align: center;">更正式地</h2>
+  当 acquire-load 操作观察 release-store 操作的结果时，就会形成 happens-before 关系。但那是什么意思？
+
+  想象一下，两个线程都将一个 7 release-store 到相同的原子变量中，第三个线程从该变量中加载 7。第三个线程和第一个或者第二个线程有一个 happens-before 关系吗？这取决于它加载“哪个 7”：线程一还是线程二的。（或许一个不相关的 7）。这使我们得出的结论是，尽管 7 等于 7，但两个 7 与两个线程有一些不同。
+
+  思考这个问题的方式是我们在[“Relaxed 排序”](#relaxed-排序)中讨论的*总修改顺序*：发生在原子变量上的所有修改的有序列表。即使将相同的值多次写入相同的变量，这些操作中的每一个都以该变量的总修改顺序代表一个单独的事件。当我们加载一个值，加载的值与每个变量“时间线”上的特定点相匹配，这告诉我们我们可能会同步哪个操作。
+
+  例如，如果原子总修改顺序是
+
+  1. 初始化为 0
+
+  2. Release-store 7（来自线程二）
+  
+  3. Release-store 6
+
+  4. Release-store 7（来自线程一）
+
+  然后，acquire-load 7 将与第二个线程的 release-store 或者最后一个事件的 release-store 同步。然而，如果我们之前（就 happens-before 关系而言）见过 6，我们知道我们看到的是最后一个 7，而不是第一个 7，这意味着我们现在与线程一有 happens-before 的关系，而不是线程二。
+
+  还有一个额外的细节，即 release-stored 的值可能会被任意数量的「获取并修改」和「比较并交换」操作修改，但仍会导致与 acquire-load 读取最终结果的 happens-before 关系。
+
+  例如，想象一个具有以下总修改顺序的原子变量：
+
+  1. 初始化为 0
+  
+  2. Release-store 7
+
+  3. Relaxed-fetch-and-add 1，改变 7 到 8
+
+  4. Relaxed-fetch-and-add 1，改变 8 到 9
+
+  5. Release-store 7
+
+  6. Relaxed-swap 10，改变 7 到 10
+
+  现在，如果我们在这个变量上执行 acquire-load 到 9，我们不仅与第四个操作（存储此值）建立了一个 happens-before 关系，同时也与第二个操作（存储 7）建立了该关系，即使第三个操作使用了 Relaxed 内存排序。
+
+  相似地，如果我们在这个变量上执行 acquire-load 到 10，而该值是由一个 relaxed 操作写入的，我们仍然建立了与第五个操作（存储 7）的 happens-before 关系。因为它只是一个普通的存储操作（不是「获取并修改」或「比较并交换」操作），它打破了规则链：我们没有与其他操作建立 happens-before 关系。
+</div>
+
+### 示例：锁定
+
+互斥锁是 release 和 acquire 排序的最常见用例（参见[第一章的“锁：互斥锁和读写锁”](./1_Basic_of_Rust_Concurrency.md#锁互斥锁和读写锁)）。当锁定时，它们使用 acquire 排序的原子操作来检查是否它已解锁，同时也（原子地）改变状态到“锁定”。当解锁时，它们使用 release 排序设置状态到“解锁”。这意味着，在解锁 mutex 和随后锁定它有一个 happens-before 关系。
+
+以下是这种模式的演示：
+
+```rust
+static mut DATA: String = String::new();
+static LOCKED: AtomicBool = AtomicBool::new(false);
+
+fn f() {
+    if LOCKED.compare_exchange(false, true, Acquire, Relaxed).is_ok() {
+        // Safety: We hold the exclusive lock, so nothing else is accessing DATA.
+        unsafe { DATA.push('!') };
+        LOCKED.store(false, Release);
+    }
+}
+
+fn main() {
+    thread::scope(|s| {
+        for _ in 0..100 {
+            s.spawn(f);
+        }
+    });
+}
+```
+
+正如我们在[第二章“比较并交换操作”](./2_Atomics.md#比较并交换操作)简要地所见，比较并交换采用两个内存排序参数：一个用于比较成功且 store 发生的情况，一个用于比较失败且 `store` 没有发生的情况。在 f 中，我们试图去改变 `LOCKED` 的值从 false 到 true，并且只有在成功的情况下才能访问 DATA。所以，我们仅关心成功的内存排序。如果 `compare_exchange` 操作失败，那一定是因为 `LOCKED` 已经设置为 true，在这种情况下 f 不会做任何事情。这与常规 mutex 上的 `try_lock` 操作相匹配。
+
+> 观察力强的读者可能已经注意到，比较并交换操作也可能是交换操作，因为在已锁定时将 true 替换为 true 不会改变代码的正确性：
+>
+> ```rust
+> // This also works.
+> if LOCKED.swap(true, Acquire) == false {
+>    // …
+> }
+> ```
+
+归功于 acquire 和 release 内存排序，我们肯定没有两个线程能并发地访问数据。正如在图 3-4 展示的，对 DATA 的任何先前访问都在随后使用 release-store 操作将 false 存储到 LOCKED 之前发生，然后在下一个 acquire-compare-exchange（或 acquire-swap）操作中将 false 更改为 true，然后在下一次访问 DATA 之前发生。
+
+![ ](./picture/raal_0304.png)
+图 3-4。锁定示例中原子操作之间的 happens-before 关系，显示了两个线程按顺序锁定和解锁。
+
+在[第四章](./4_Building_Our_Own_Spin_Lock.md)，我们将把这个概念变成一个可重复使用的类型：自旋锁。
 
 ### 示例：使用间接的方式惰性初始化
+
+在[第二章的“示例：惰性一次性初始化”](./2_Atomics.md#示例惰性一次性初始化)中，我们实现一个全局变量的惰性初始化，使用「比较且交换」操作去处理多个线程竞争同时初始化值的情况。由于该值是非零的 64 位整数，我们能够使用 AtomicU64 来存储它，在初始化之前使用零作为占位符。
+
+要对不适合单个原子变量的更大的数据类型做同样的事情，我们需要寻找替代方案。
+
+在这个例子中，假设我们想保持非阻塞行为，这样线程就不会等待另一个线程，而是从第一个线程中竞争并获取值来完成初始化。这意味着我们仍然需要能够在单个原子操作中从“未初始化”到“完全初始化”。
+
+正如软件工程的基本定理告诉我们的那样，计算机科学中的每个问题都可以通过添加另一层间接来解决，这个问题也不例外。由于我们无法将数据放入单个原子变量中，因此我们可以使用原子变量来存储指向数据的*指针*。
+
+`AtomicPtr<T>` 是 `*mut T` 的原子版本：指向 T 的指针。我们可以使用空指针作为初始状态的占位符，并使用比较并交换操作将其原子地替换为指向新分配的、完全初始化的 T 的指针，然后可以由其他线程读取。
+
+由于我们不仅共享包含指针的原子变量，还共享它所指向的数据，因此我们不能再像[第2章](./2_Atomics.md)那样使用 Relaxed 的内存排序。我们需要确保数据的分配和初始化不会与读取数据竞争。换句话说，我们需要在 store 和 load 操作上使用 release 和 acquire 排序，以确保编译器和处理器不会通过，例如，重新排序指针的存储和数据本身的初始化来破坏我们的代码。
+
+对于一些名为 Data 的任意数据类型，这引出了以下实现：
+
+```rust
+use std::sync::atomic::AtomicPtr;
+
+fn get_data() -> &'static Data {
+    static PTR: AtomicPtr<Data> = AtomicPtr::new(std::ptr::null_mut());
+
+    let mut p = PTR.load(Acquire);
+
+    if p.is_null() {
+        p = Box::into_raw(Box::new(generate_data()));
+        if let Err(e) = PTR.compare_exchange(
+            std::ptr::null_mut(), p, Release, Acquire
+        ) {
+            // Safety: p comes from Box::into_raw right above,
+            // and wasn't shared with any other thread.
+            drop(unsafe { Box::from_raw(p) });
+            p = e;
+        }
+    }
+
+    // Safety: p is not null and points to a properly initialized value.
+    unsafe { &*p }
+}
+```
+
+如果我们以 acquire-load 操作从 PTR 得到的指针是非空的，我们假设它指向已初始化的数据，并构建对该数据的引用。
+
+然而，如果它仍然为空，我们会生成新数据，并使用 `Box::new` 将其存储在新分配中。然后，我们使用 `Box::into_raw` 将此 `Box` 转换为原始指针，因此我们可以尝试使用比较并交换操作将其存储到 PTR 中。如果另一个线程赢得初始化竞争，`compare_exchange` 将失败，因为 PTR 不再是空的。如果发生这种情况，我们将原始指针转回 Box，使用 `dro`p 来解除分配，避免内存泄漏，并继续使用另一个线程存储在 PTR 中的指针。
+
+在最后的不安全块中，关于安全性的注视表明我们的假设是指它指向的数据已经被初始化。注意，这包括对事情发生顺序的假设。为了确保我们的假设成立，我们使用 release 和 acquire 内存顺序来确保初始化数据实际上在创建对其的引用之前已经发生。
+
+我们在两个地方加载一个潜在的非空（即初始化）指针：通过 load 操作和当 compare_exchange 失败时的该操作。因此，如上所述，我们需要在 load 内存顺序和 compare_exchange 失败内存顺序上都使用 Acquire，以便能够与存储指针的操作进行同步。当 compare_exchange 操作成功时，会发生 store 操作，因此我们必须使用 Release 作为其成功的内存顺序。
+
+图 3-5 显示了三个线程调用 `get_data()` 的情况的操作和发生前关系的可视化。在这种情况下，线程 A 和 B 都观察到一个空指针并都试图去初始化原子指针。线程 A 赢得竞争，导致线程 B 的 compare_exchange 调用失败。线程 C 在通过线程 A 初始化之后观察原子指针。最终结果是，所有三个线程最终都使用由线程 A 分配的 box。
+
+![ ](./picture/raal_0305.png)
+图3-5。调用 `get_data()` 的三个线程之间的操作和发生前关系。
 
 ## Consume 排序
 
@@ -231,7 +428,7 @@ fn main() {
 * 在单个线程中，每个操作之间都会有一个 *happens-before* 关系。
 * 创建一个线程的操作在顺序上发生在该线程的所有操作之前。
 * 线程做的任何事情都会在 join 这个线程之前发生。
-* 释放 mutex 的操作在顺序上发生在再次锁定 mutex 的操作之前。
+* 解锁 mutex 的操作在顺序上发生在再次锁定 mutex 的操作之前。
 * 从 release 存储中以 acquire 加载值建立了一个 happens-before 关系。该值可以通过任意数量的获取和修改以及比较和交换操作修改。
 * 如果存在的话，consume-load 将是 acquire-load 的轻量级版本。
 * 顺序一致的排序导致全局一致的操作顺序，但几乎从来都没有必要，并且会使代码审查更加复杂。
