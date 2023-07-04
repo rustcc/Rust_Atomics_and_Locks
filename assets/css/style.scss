@@ -3,6 +3,38 @@
 
 @import "{{ site.theme }}";
 
+a {
+  color: #4d615f;
+}
+
+a:hover {
+  text-decoration: none;
+  color: #046960;
+}
+
+.markdown-body code {
+  background-color: rgba(69, 132, 161, 0.85);
+  color: white;
+}
+
+.markdown-body .highlight pre,
+.markdown-body pre {
+  background: #8da7ce87;
+}
+
+.box pre {
+  color: black;
+}
+
+h1,
+h2,
+h3,
+h4,
+h5,
+h6 {
+  color: #402e52;
+}
+
 @media (prefers-color-scheme: dark) {
   html,body,.markdown-body {
     background-color: #000;
@@ -46,36 +78,4 @@
   border: medium solid green;
   color: green;
   padding: 1rem;
-}
-
-h1,
-h2,
-h3,
-h4,
-h5,
-h6 {
-  color: #402e52;
-}
-
-a {
-  color: #4d615f;
-}
-
-a:hover {
-  text-decoration: none;
-  color: #046960;
-}
-
-.markdown-body code {
-  background-color: rgb(51 90 108 / 85%);
-  color: white;
-}
-
-.markdown-body .highlight pre,
-.markdown-body pre {
-  background: #8da7ce87;
-}
-
-.box pre {
-  color: black;
 }
