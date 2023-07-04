@@ -38,7 +38,7 @@ fn f() {
 
 我们产生两个线程，它们都将执行 f 作为它们的主函数。这两个线程将输出一个信息并且展示它们的*线程 id*，主线程也将输出它自己的信息。
 
-<div style="border:medium solid green; color:green;">
+<div class="box">
   <h2 style="text-align: center;">Thread ID</h2>
   Rust 标准库位每一个线程分配一个唯一的标识符。此标识符可以通过 Thread::id() 访问并且拥有 ThreadId 类型。除了复制 ThreadId 以及检查它们相等外，你也做不了什么。不能保证这些 ID 将会连续分配，只是每个线程都会有所不同。
 </div>
@@ -95,7 +95,7 @@ This is my thread id: ThreadId(2)
 This is my thread id: ThreadId(3)
 ```
 
-<div style="border:medium solid green; color:green;">
+<div class="box">
   <h2 style="text-align: center;">输出锁定</h2>
   println 宏使用 <code>std::io::Stdout::lock()</code> 去确保输出没有被中断。<code>println!()</code> 将等待直到任意并发地运行完成后，在写入输出。如果不是这样，我们可以得到更多的交叉输出：
 
@@ -143,7 +143,7 @@ println!("average: {average}");
 
 如果 numbers 是空的，当它尝试去除以 0 时（2），线程将发生 panic，而 `join` 将会发生 panic 消息，将由于 `unwarp` 导致主线程也 panic。
 
-<div style="border:medium solid green; color:green;">
+<div class="box">
   <h2 style="text-align: center;">Thread Builder</h2>
   <p><code>std::thread::spawn</code> 函数事实上仅是 <code>std::thread::Builder::new().spawn().unwrap()</code> 的快捷缩写。</p>
 
@@ -213,7 +213,7 @@ error[E0499]: cannot borrow `numbers` as mutable more than once at a time
   |         ------- second borrow occurs due to use of `numbers` in closure
 ```
 
-<div style="border:medium solid green; color:green;">
+<div class="box">
   <h2 style="text-align: center;">泄漏启示录</h2>
   <p>在 Rust 1.0 之前，标准库有一个函数叫做 <code>std::thread::scoped</code>，它将直接产生一个线程，就像 <code>std::thread::spawn</code>。它允许无 <code>'static</code> 的捕获，因为它返回的不是 JoinGuard，而是当被 drop 时 join 到线程的 JoinGuard。任意的借用数据仅需要比这个 JoinGuard 活得更久。只要 JoinGuard 在某个时候被 drop，这似乎是安全的。</p>
 
@@ -304,7 +304,7 @@ thread::spawn(move || dbg!(b)); // 3
 2. 克隆 Arc 增加引用计数到两个，并为我们提供相同的分配到第二个 Arc。
 3. 两个 Arc 都获取到自己的 Arc，通过 Arc 它们可以获取共享数组。当它们 drop 它们的 Arc，两者都会减少引用计数。最后一个 drop 它的 Arc 的线程将看见计数器减少到 0，并且将是 drop 和取消分配数组的线程。
 
-<div style="border:medium solid green; color:green;">
+<div class="box">
   <h2 style="text-align: center;">命名克隆</h2>
   <p>不得不给每个 Arc 的克隆取一个不同的名称，这可能使得代码变得混乱难以追踪。尽管每个 Arc 的克隆都是一个独立的对象，而通过每个克隆赋予不同的名称并不能很好地反映这一点。</p>
 
@@ -378,7 +378,7 @@ fn f(a: &i32, b: &mut i32) {
 
 除了使用一个不安全的块（`unsafe`）去禁止一些编译器安全地检查，否则不可能去写 Rust 程序打断编译器的假设。
 
-<div style="border:medium solid green; color:green;">
+<div class="box">
   <h2 style="text-align: center;">未定义行为</h2>
   <p>类似 C、C++ 和 Rust 都有一套需要遵守的规则，以避免未定义行为。例如，Rust 的规则之一是，对任何对象的可变引用永远不可能超过一个。</p>
 
@@ -680,7 +680,7 @@ fn main() {
 
 虽然锁中毒是一种强大的机制，在实践中，从潜在的不一致状态恢复并不常见。如果锁中毒，大多数代码要么忽略了中毒或者使用 `unwrap()` 去 panic，这有效地将 panic 传递给 mutex 的所有用户。
 
-<div style="border:medium solid green; color:green;">
+<div class="box">
   <h2 style="text-align: center;">MutexGuard 的生命周期</h2>
   <p>尽管隐式 drop guard 解锁 mutex 很方便，但是它有时会导致微妙的意外。如果我们使用 let 语句授任 guard 一个名字（正如我们上面的示例），看它什么时候会被丢弃相对简单，因为局部变量定义在它们作用域范围的末尾。然而，正如上述示例所示，不明确地 drop guard 可能导致 mutex 锁定的时间超过所需时间。</p>
 
@@ -726,13 +726,13 @@ Rust 标准库通过 `std::sync::RwLock<T>` 类型提供该锁。它与标准库
 
 Rust 标准库仅提供一种通用的 `RwLock` 类型，但它的实现依赖于操作系统。读写锁之间有很多细微差别。当有 writer 等待时，即使当锁已经读取锁定时，很多实现将阻塞新的 reader。这样做是为了防止 *writer 挨饿*，在这种情况下，很多 reader 将共同持有锁而导致锁从不解锁，从而不允许任何 writer 更新数据。
 
-<div style="border:medium solid green; color:green;">
+<div class="box">
   <h2 style="text-align: center;">在其他语言中的互斥锁</h2>
-  Rust 标准的 Mutex 和 RwLock 类型与你在其它语言（例如 C、C++）发现的看起来有一点不同。
+  <p>Rust 标准的 Mutex 和 RwLock 类型与你在其它语言（例如 C、C++）发现的看起来有一点不同。</p>
 
-  最大的区别是，Rust 的 <code>Mutex&lt;T&gt;</code> 数据<i>包含</i>它正在保护的数据。例如，在 C++ 中，<code>std::mutex</code> 并不包含着它保护的数据，甚至不知道它在保护什么。这意味着，用户有指责记住哪些数据由 mutex 保护，并且确保每次访问“受保护”的数据都锁定正确的 mutex。注意，当读取其它语言涉及到 mutex 的代码，或者与不熟悉 Rust 程序员沟通时，非常有用。Rust 程序员可能讨论关于“数据在 mutex 之中”，或者说“mutex 中包裹数据”这类话，这可能让只熟悉其它语言 mutex 的程序员感到困惑。
+  <p>最大的区别是，Rust 的 <code>Mutex&lt;T&gt;</code> 数据<i>包含</i>它正在保护的数据。例如，在 C++ 中，<code>std::mutex</code> 并不包含着它保护的数据，甚至不知道它在保护什么。这意味着，用户有指责记住哪些数据由 mutex 保护，并且确保每次访问“受保护”的数据都锁定正确的 mutex。注意，当读取其它语言涉及到 mutex 的代码，或者与不熟悉 Rust 程序员沟通时，非常有用。Rust 程序员可能讨论关于“数据在 mutex 之中”，或者说“mutex 中包裹数据”这类话，这可能让只熟悉其它语言 mutex 的程序员感到困惑。</p>
 
-  如果你真的需要一个不包含任何内容的独立 mutex，例如，保护一些外部硬件，你可以使用 <code>Mutex&lt;()&gt;</code>。但即使是这种情况，你最好定义一个（可能 0 大小开销）的类型来与该硬件对接，并将其包裹在 Mutex 之中。这样，在与硬件交互之前，你仍然可以强制锁定 mutex。
+  <p>如果你真的需要一个不包含任何内容的独立 mutex，例如，保护一些外部硬件，你可以使用 <code>Mutex&lt;()&gt;</code>。但即使是这种情况，你最好定义一个（可能 0 大小开销）的类型来与该硬件对接，并将其包裹在 Mutex 之中。这样，在与硬件交互之前，你仍然可以强制锁定 mutex。</p>
 </div>
 
 ## 等待: 阻塞（Park）和条件变量

@@ -484,7 +484,7 @@ fn allocate_new_id() -> u32 {
 
 现在，我们在修改 NEXT_ID 之前，检查并 panic，保证它将从不增加超出 1000，使溢出变得不可能。如果我们愿意，我们现在可以将上限从 1000 提高到 `u32::MAX`，而不必担心它可能会超过极限的边缘情况。
 
-<div style="border:medium solid green; color:green;">
+<div class="box">
   <h2 style="text-align: center;">Fetch-Update</h2>
   <p>原子类型有一个名为 <code>fetch_update</code> 的方便方法，用于比较并交换循环模式。它相当于加载操作，然后就是重复计算和 <code>compare_exchange_weak</code> 的循环，就像我们上面做的那样。</p>
 
