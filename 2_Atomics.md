@@ -486,17 +486,17 @@ fn allocate_new_id() -> u32 {
 
 <div style="border:medium solid green; color:green;">
   <h2 style="text-align: center;">Fetch-Update</h2>
-  原子类型有一个名为 `fetch_update` 的方便方法，用于比较并交换循环模式。它相当于加载操作，然后就是重复计算和 <code>compare_exchange_weak</code> 的循环，就像我们上面做的那样。
+  <p>原子类型有一个名为 <code>fetch_update</code> 的方便方法，用于比较并交换循环模式。它相当于加载操作，然后就是重复计算和 <code>compare_exchange_weak</code> 的循环，就像我们上面做的那样。</p>
 
-  使用它，我们可以使用一行诗心啊我们的 allocate_new_id：
+  <p>使用它，我们可以使用一行诗心啊我们的 allocate_new_id：</p>
   
   <pre>
   NEXT_ID.fetch_update(Relaxed, Relaxed,
       |n| n.checked_add(1)).expect("too many IDs!")</pre>
   
-  有关详细信息，请查看该方法的文档。
+  <p>有关详细信息，请查看该方法的文档。</p>
 
-  我们不会在本书中使用 <code>fetch_update</code> 方法，因此我们可以专注于单个原子操作。
+  <p>我们不会在本书中使用 <code>fetch_update</code> 方法，因此我们可以专注于单个原子操作。</p>
 </div>
 
 ### 示例：惰性一次性初始化
