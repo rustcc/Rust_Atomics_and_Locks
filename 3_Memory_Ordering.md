@@ -684,5 +684,9 @@ fn main() {
 * 顺序一致的排序导致全局一致的操作顺序，但几乎从来都没有必要，并且会使代码审查更加复杂。
 * 屏障允许你组合多个操作的内存顺序或有条件地应用内存顺序。
 
+<p style="text-align: center; padding-block-start: 5rem;">
+  <a href="./3_Memory_Ordering.html">下一篇，第四章：构建我们自己的自旋锁</a>
+</p>
+
 [^1]: <https://zh.wikipedia.org/wiki/内存排序>
 [^2]: <https://zh.wikipedia.org/wiki/内存屏障>

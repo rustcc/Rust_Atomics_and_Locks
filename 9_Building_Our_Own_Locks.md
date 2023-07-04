@@ -958,6 +958,10 @@ impl<T> Drop for WriteGuard<'_, T> {
 * 一个额外的原子变量可以用于独立于 reader 唤醒 writer。
 * 为了避免 writer 饥饿，需要额外的状态优先考虑一个等待的 writer 而不是新的 reader。
 
+<p style="text-align: center; padding-block-start: 5rem;">
+  <a href="./10_Ideas_and_Inspiration.html">下一篇，第十章：主意和灵感</a>
+</p>
+
 [^1]: <https://zh.wikipedia.org/wiki/忙碌等待>
 [^2]: 虚假唤醒是一个线程在没有收到明确的信号的情况下，从等待状态中被唤醒
 [^3]: <https://zh.wikipedia.org/wiki/互斥锁>
