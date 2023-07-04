@@ -138,9 +138,9 @@ impl<T> Drop for MutexGuard<'_, T> {
 
 <div style="border:medium solid green; color:green;">
   <h2 style="text-align: center;">Lock API</h2>
-  如果你正在计划将实现 Rust 锁当作一个新的爱好，那么你可能很快对涉及提供安全接口的样板代码感到厌烦。也就是说，UnsafeCell、Sync 实现、守护类型、Deref 实现等等。
+  <p>如果你正在计划将实现 Rust 锁当作一个新的爱好，那么你可能很快对涉及提供安全接口的样板代码感到厌烦。也就是说，UnsafeCell、Sync 实现、守护类型、Deref 实现等等。</p>
 
-  crate.io 上的 <code>lock_api</code> 可以自动地去处理这些事情。你仅需要制作一个锁定状态的类型，并通过（不安全）<code>lock_api::RawMutex</code> trait 提供（不安全）锁定和解锁功能。<code>lock_api::Mutex</code> 类型将根据你的锁实现，提供一个完全安全的和符合人体工学的 mutex 类型作为返回，包括 mutex 守护。
+  <p>crate.io 上的 <code>lock_api</code> 可以自动地去处理这些事情。你仅需要制作一个锁定状态的类型，并通过（不安全）<code>lock_api::RawMutex</code> trait 提供（不安全）锁定和解锁功能。<code>lock_api::Mutex</code> 类型将根据你的锁实现，提供一个完全安全的和符合人体工学的 mutex 类型作为返回，包括 mutex 守护。</p>
 </div>
 
 ### 避免系统调用
@@ -264,9 +264,10 @@ fn lock_contended(state: &AtomicU32) {
 
 <div style="border:medium solid green; color:green;">
   <h2 style="text-align: center;">Cold 和 Inline 属性</h2>
-  你可以增加 <code>#[cold]</code> 属性到 <code>lock_contented</code> 函数定义，以帮助编译器理解在常见（未考虑）情况下不调用这个函数，这对 <code>lock</code> 方法的优化有帮助。
+  
+  <p>你可以增加 <code>#[cold]</code> 属性到 <code>lock_contented</code> 函数定义，以帮助编译器理解在常见（未考虑）情况下不调用这个函数，这对 <code>lock</code> 方法的优化有帮助。</p>
 
-  额外地，你也可以增加 <code>#[inline]</code> 属性到 Mutex 和 MutexGuard 方法，以通知编译器将其内联可能是一个好主意：将生成的指令将其放置在调用方法的地方。一般来说，是否能提高性能很难说，但对于这些非常小的功能，通常如此。
+  <p>额外地，你也可以增加 <code>#[inline]</code> 属性到 Mutex 和 MutexGuard 方法，以通知编译器将其内联可能是一个好主意：将生成的指令将其放置在调用方法的地方。一般来说，是否能提高性能很难说，但对于这些非常小的功能，通常如此。</p>
 </div>
 
 ### 基准测试
@@ -567,21 +568,21 @@ impl Condvar {
 
 <div style="border:medium solid green; color:green;">
   <h2 style="text-align: center;">惊群问题（Thundering Herd Problem）</h2>
-  当使用 notify_one() 唤醒正在等待很多相同事情的线程时，当使用条件变量时可能遇到的高性能问题。
+  <p>当使用 notify_one() 唤醒正在等待很多相同事情的线程时，当使用条件变量时可能遇到的高性能问题。</p>
 
-  问题是，在唤醒后，所有这些线程都将立即尝试锁定相同的 mutex。更可能地是，仅有一个线程将成功，并且所有其它线程都将回到睡眠状态。很多线程都急于宣称相同资源的资源浪费问题被称为<i>惊群问题</i>。
+  <p>问题是，在唤醒后，所有这些线程都将立即尝试锁定相同的 mutex。更可能地是，仅有一个线程将成功，并且所有其它线程都将回到睡眠状态。很多线程都急于宣称相同资源的资源浪费问题被称为<i>惊群问题</i>。</p>
 
-  认为 <code>Condvar::notify_all()</code> 是从根本上不值得优化的反模式不是没有原因的。条件变量的目的是去解锁 mutex 并且当接受通知时重新锁定它，因此也许一次通知多个线程从来不是任何好主意。
+  <p>认为 <code>Condvar::notify_all()</code> 是从根本上不值得优化的反模式不是没有原因的。条件变量的目的是去解锁 mutex 并且当接受通知时重新锁定它，因此也许一次通知多个线程从来不是任何好主意。</p>
 
-  甚至，如果我们想针对这种情况进行优化，我们可以在像 futex 这种支持<i>重新排队</i>操作的操作系统上，例如在 Linux 山的 FUTEX_REQUEUE（参见<a href="./8_Operating_System_Primitives.html">第八章“Futex 操作”</a>）
+  <p>甚至，如果我们想针对这种情况进行优化，我们可以在像 futex 这种支持<i>重新排队</i>操作的操作系统上，例如在 Linux 山的 FUTEX_REQUEUE（参见<a href="./8_Operating_System_Primitives.html">第八章“Futex 操作”</a>）</p>
 
-  与其唤醒许多线程，一旦它们意识到锁已经被占用，除一个线程外，其它线程都将立刻回到睡眠状态，我们可以<i>重新</i>排队除一个线程外的其它所有线程，以便它们的 futex 等待操作不再等待条件变量的 counter，而是开始等待 mutex 的状态。
+  <p>与其唤醒许多线程，一旦它们意识到锁已经被占用，除一个线程外，其它线程都将立刻回到睡眠状态，我们可以<i>重新</i>排队除一个线程外的其它所有线程，以便它们的 futex 等待操作不再等待条件变量的 counter，而是开始等待 mutex 的状态。</p>
 
-  重新排队一个等待线程不会唤醒它。时上升，线程甚至不知道自己已经在重新排队。不幸地是，这可能导致一些非常细微的陷阱。
+  <p>重新排队一个等待线程不会唤醒它。事实上，线程甚至不知道自己已经在重新排队。不幸地是，这可能导致一些非常细微的陷阱。</p>
 
-  例如，还记得 3 个状态的 mutex 总是在唤醒后必须锁定正确的状态（“有着等待线程的锁定”），以确保其它等待线程不会被遗忘？这意味着我们应该不在我们的 <code>Condvar::wait()</code> 实现中使用常规的 mutex 方法，这可能将 mutex 设置到一个错误的状态。
+  <p>例如，还记得 3 个状态的 mutex 总是在唤醒后必须锁定正确的状态（“有着等待线程的锁定”），以确保其它等待线程不会被遗忘？这意味着我们应该不在我们的 <code>Condvar::wait()</code> 实现中使用常规的 mutex 方法，这可能将 mutex 设置到一个错误的状态。</p>
 
-  一个重新排队的条件变量实现需要存储等待线程使用的 mutex 的指针。否则，通知线程将不知道等待线程重新排队到哪个原子变量（互斥体状态）。这就是为什么条件变量通常允许两个线程去等待不同的 mutex。尽管许多条件变量的实现并未利用重新排队，但未来版本可能利用此功能的可能性是有用的。
+  <p>一个重新排队的条件变量实现需要存储等待线程使用的 mutex 的指针。否则，通知线程将不知道等待线程重新排队到哪个原子变量（互斥体状态）。这就是为什么条件变量通常允许两个线程去等待不同的 mutex。尽管许多条件变量的实现并未利用重新排队，但未来版本可能利用此功能的可能性是有用的。</p>
 </div>
 
 ## 读写锁

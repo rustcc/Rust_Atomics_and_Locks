@@ -145,11 +145,11 @@ println!("average: {average}");
 
 <div style="border:medium solid green; color:green;">
   <h2 style="text-align: center;">Thread Builder</h2>
-  std::thread::spawn 函数事实上仅是 std::thread::Builder::new().spawn().unwrap() 的快捷缩写。
+  <p><code>std::thread::spawn</code> 函数事实上仅是 <code>std::thread::Builder::new().spawn().unwrap()</code> 的快捷缩写。</p>
 
-  std::thread::Builder 允许你在产生线程之前为新线程设置一些设置。你可以使用它为新线程配置栈大小并给新线程一个名字。线程的名字是可以通过 std::thread::current().name() 获得，这将在 panic 消息中可用，并在监控和大多数雕饰工具中可见。
+  <p><code>std::thread::Builder</code> 允许你在产生线程之前为新线程设置一些设置。你可以使用它为新线程配置栈大小并给新线程一个名字。线程的名字是可以通过 <code>std::thread::current().name()</code> 获得，这将在 panic 消息中可用，并在监控和大多数雕饰工具中可见。</p>
 
-  此外，Builder 的产生函数返回一个 std::io::Result，允许你处理新线程失败的情况。如果操作系统内存不足，或者资源限制已经应用于你对程序，这是可能发生的。如果 std::thread::spawn 函数不能去产生一个新线程，它只会 panic。
+  <p>此外，Builder 的产生函数返回一个 <code>std::io::Result</code>，允许你处理新线程失败的情况。如果操作系统内存不足，或者资源限制已经应用于你对程序，这是可能发生的。如果 <code>std::thread::spawn</code> 函数不能去产生一个新线程，它只会 panic。</p>
 </div>
 
 ## 线程作用域
@@ -215,11 +215,11 @@ error[E0499]: cannot borrow `numbers` as mutable more than once at a time
 
 <div style="border:medium solid green; color:green;">
   <h2 style="text-align: center;">泄漏启示录</h2>
-  在 Rust 1.0 之前，标准库有一个函数叫做 <code>std::thread::scoped</code>，它将直接产生一个线程，就像 <code>std::thread::spawn</code>。它允许无 <code>'static</code> 的捕获，因为它返回的不是 JoinGuard，而是当被 drop 时 join 到线程的 JoinGuard。任意的借用数据仅需要比这个 JoinGuard 活得更久。只要 JoinGuard 在某个时候被 drop，这似乎是安全的。
+  <p>在 Rust 1.0 之前，标准库有一个函数叫做 <code>std::thread::scoped</code>，它将直接产生一个线程，就像 <code>std::thread::spawn</code>。它允许无 <code>'static</code> 的捕获，因为它返回的不是 JoinGuard，而是当被 drop 时 join 到线程的 JoinGuard。任意的借用数据仅需要比这个 JoinGuard 活得更久。只要 JoinGuard 在某个时候被 drop，这似乎是安全的。</p>
 
-  就在 Rust 1.0 发布之前，人们慢慢发现它似乎不能保证某些东西被 drop。有很多种方式没有 drop 它，例如创建一个引用计数节点的循环，可以忘记某些东西或者*泄漏*它。
+  <p>就在 Rust 1.0 发布之前，人们慢慢发现它似乎不能保证某些东西被 drop。有很多种方式没有 drop 它，例如创建一个引用计数节点的循环，可以忘记某些东西或者*泄漏*它。</p>
 
-  最终，在一些人提及的“泄漏启示录”中得到结论，（安全）接口的设计不能依赖假设对象总是在它们的生命周期结束后 drop。泄漏一个对象可能会导致泄漏更多对象（例如，泄漏一个 Vec 将也导致泄漏它的元素），但它并不会导致未定义行为（undefind behavior）[^6]。因此，std::thread::scoped 将不再视为安全的并从标准库移除。此外，<code>std::mem::forget</code> 从一个不安全的函数升级到*安全*的函数，以强调忘记（或泄漏）总是一种可能性。
+  <code>最终，在一些人提及的“泄漏启示录”中得到结论，（安全）接口的设计不能依赖假设对象总是在它们的生命周期结束后 drop。泄漏一个对象可能会导致泄漏更多对象（例如，泄漏一个 Vec 将也导致泄漏它的元素），但它并不会导致未定义行为（undefind behavior）。因此，<code>std::thread::scoped</code> 将不再视为安全的并从标准库移除。此外，<code>std::mem::forget</code> 从一个不安全的函数升级到<i>安全</i>的函数，以强调忘记（或泄漏）总是一种可能性。</code>
 
   直到后来，在 Rust 1.63 中，添加了一个新的 <code>std::thread::scope</code> 功能，其新设计不依赖 Drop 来获得正确性。
 </div>
@@ -306,11 +306,11 @@ thread::spawn(move || dbg!(b)); // 3
 
 <div style="border:medium solid green; color:green;">
   <h2 style="text-align: center;">命名克隆</h2>
-  不得不给每个 Arc 的克隆取一个不同的名称，这可能使得代码变得混乱难以追踪。尽管每个 Arc 的克隆都是一个独立的对象，而通过每个克隆赋予不同的名称并不能很好地反映这一点。
+  <p>不得不给每个 Arc 的克隆取一个不同的名称，这可能使得代码变得混乱难以追踪。尽管每个 Arc 的克隆都是一个独立的对象，而通过每个克隆赋予不同的名称并不能很好地反映这一点。</p>
 
-  Rust 允许（并且鼓励）你通过定义有着新的名称的相同变量去*遮蔽*变量。如果你在相同作用域这么做，则无法再命名原始变量。但是通过打开一个新的作用域，可以使用类似 <code>let a = a.clone();</code> 的语句在该作用域内重用相同的名称，同时在作用于外保留原始变量的可用性。
+  <p>Rust 允许（并且鼓励）你通过定义有着新的名称的相同变量去*遮蔽*变量。如果你在相同作用域这么做，则无法再命名原始变量。但是通过打开一个新的作用域，可以使用类似 <code>let a = a.clone();</code> 的语句在该作用域内重用相同的名称，同时在作用于外保留原始变量的可用性。</p>
   
-  通过在新的作用域（使用 <code>{}</code>）中封装闭包，我们可以在将变量移动到闭包中之前，进行克隆，并不要重新命名它们。
+  <p>通过在新的作用域（使用 <code>{}</code>）中封装闭包，我们可以在将变量移动到闭包中之前，进行克隆，并不要重新命名它们。</p>
   <div style="columns: 2;column-gap: 20px;column-rule-color: green;column-rule-style: solid;">
     <div style="break-inside: avoid">
       <pre>
@@ -359,7 +359,7 @@ error[E0596]: cannot borrow data in an `Arc` as mutable
 * *可变借用*
   * 使用 `&mut` 借用会得到一个*可变借用*。可变借用保证了它是该数据的唯一激活的借用。这确保了可变的数据将不会改变任何其它代码正在查看的数据。
 
-这两个概念一起，完全阻止了*数据竞争*：一个线程正在改变数据，而另一个线程正在并发地访问数据的情况。数据竞争通常是*未定义行为*，这意味着编译器不需要考虑这些情况。它只是假设它们并不会发生。
+这两个概念一起，完全阻止了*数据竞争*：一个线程正在改变数据，而另一个线程正在并发地访问数据的情况。数据竞争通常是*未定义行为*[^6]，这意味着编译器不需要考虑这些情况。它只是假设它们并不会发生。
 
 为了清晰地表达这个意思，让我们来看一看编译器可以使用借用规则作出有用假设的示例：
 
@@ -380,40 +380,39 @@ fn f(a: &i32, b: &mut i32) {
 
 <div style="border:medium solid green; color:green;">
   <h2 style="text-align: center;">未定义行为</h2>
-  类似 C、C++ 和 Rust 都有一套需要遵守的规则，以避免未定义行为。例如，Rust 的规则之一是，对任何对象的可变引用永远不可能超过一个。
+  <p>类似 C、C++ 和 Rust 都有一套需要遵守的规则，以避免未定义行为。例如，Rust 的规则之一是，对任何对象的可变引用永远不可能超过一个。</p>
 
-  在 Rust 中，仅当使用 unsafe 代码块才能打破这些规则。“unsafe”并不意味着代码是错误的或者错位安全使用，而是编译器并没有为你验证代码是安全的。如果代码却是违法了这些规则，则称为不健全的（unsound）。
+  <p>在 Rust 中，仅当使用 unsafe 代码块才能打破这些规则。“unsafe”并不意味着代码是错误的或者错位安全使用，而是编译器并没有为你验证代码是安全的。如果代码却是违法了这些规则，则称为不健全的（unsound）。</p>
 
-  允许编译器在不检查的情况下假设这些规则从未破坏。当破坏是，这将导致叫做为定义行为的问题，我们需要不惜一切代价去避免。如果我们允许编译器作出与实际不符的假设，那么它可能很容易导致关于代码不同部分更错误的结论，影响你整个程序。
+  <p>允许编译器在不检查的情况下假设这些规则从未破坏。当破坏是，这将导致叫做为定义行为的问题，我们需要不惜一切代价去避免。如果我们允许编译器作出与实际不符的假设，那么它可能很容易导致关于代码不同部分更错误的结论，影响你整个程序。</p>
 
-  作为一个具体的例子，让我们看看在切片上使用 <code>get_unchecked</code> 方法的小片段：
+  <p>作为一个具体的例子，让我们看看在切片上使用 <code>get_unchecked</code> 方法的小片段：</p>
 
   <pre>let a = [123, 456, 789];
 let b = unsafe { a.get_unchecked(index) };</pre>
 
-  <code>get_unchecked</code> 方法给我们一个给定索引的切片元素，就像 <code>a[index]</code>，但是允许变异器假设索引总是在边界，没有任何检查。
+  <p><code>get_unchecked</code> 方法给我们一个给定索引的切片元素，就像 <code>a[index]</code>，但是允许变异器假设索引总是在边界，没有任何检查。</p>
 
-  这意味着，在代码片段中，由于 a 的长度是 3，编译器可能假设索引小雨 3。这使我们确保其假设成立。
+  <p>这意味着，在代码片段中，由于 a 的长度是 3，编译器可能假设索引小雨 3。这使我们确保其假设成立。</p>
 
-  如果我们破坏了这个假设，例如，我们以等于 3 的索引运行，任何事情都可能发生。它可能导致读取 `a` 之后存储的任何内存内容。这可能导致程序崩溃。它可能会执行程序中完全无关的部分。它可能会引起各种糟糕的情况。
+  <p>如果我们破坏了这个假设，例如，我们以等于 3 的索引运行，任何事情都可能发生。它可能导致读取 a 之后存储的任何内存内容。这可能导致程序崩溃。它可能会执行程序中完全无关的部分。它可能会引起各种糟糕的情况。</p>
 
-  或许令人惊讶的是，为定义行为可能“回到过去”，导致之前的代码出问题。要理解这种情况是如何发生的，想象我们上面的片段有一个 match 语句，如下：
+  <p>或许令人惊讶的是，为定义行为可能“回到过去”，导致之前的代码出问题。要理解这种情况是如何发生的，想象我们上面的片段有一个 match 语句，如下：</p>
 
-  <pre>
-match index {
+  <pre>match index {
    0 => x(),
    1 => y(),
    _ => z(index),
 }
 
 let a = [123, 456, 789];
-let b = unsafe { a.get_unchecked(index) };
-  </pre>
-  由于不安全的代码，允许编译器假设索引只有 0、1 或 2。从逻辑上讲，我们的 match 语句的最后分支仅会匹配到 2，因此 z 仅会调用为 <code>z(2)</code>。这个结论不仅可以优化匹配，还可以优化 z 本身。这可以扔掉代码中未使用的部分。
+let b = unsafe { a.get_unchecked(index) };</pre>
 
-  如果我们以 3 的索引执行此设置，我们的程序试图去执行已优化的部分，导致完全地为定义行为，这还远在我们到达最后一行不安全的块之前。就像这样，未定义行为通过整个程序向后或者向前传播，通过非常意想不到的方式传播。
+  <p>由于不安全的代码，允许编译器假设索引只有 0、1 或 2。从逻辑上讲，我们的 match 语句的最后分支仅会匹配到 2，因此 z 仅会调用为 <code>z(2)</code>。这个结论不仅可以优化匹配，还可以优化 z 本身。这可以扔掉代码中未使用的部分。</p>
 
-  当调用任何的不安全函数时，读它的文档并确保你完全理解它的<i>安全需求</i>：作为调用者，你需要坚持的假设，以避免未定义行为。
+  <p>如果我们以 3 的索引执行此设置，我们的程序试图去执行已优化的部分，导致完全地为定义行为，这还远在我们到达最后一行不安全的块之前。就像这样，未定义行为通过整个程序向后或者向前传播，通过非常意想不到的方式传播。</p>
+
+  <p>当调用任何的不安全函数时，读它的文档并确保你完全理解它的<i>安全需求</i>：作为调用者，你需要坚持的假设，以避免未定义行为。</p>
 </div>
 
 ## 内部可变性
@@ -683,19 +682,19 @@ fn main() {
 
 <div style="border:medium solid green; color:green;">
   <h2 style="text-align: center;">MutexGuard 的生命周期</h2>
-  尽管隐式 drop guard 解锁 mutex 很方便，但是它有时会导致微妙的意外。如果我们使用 let 语句授任 guard 一个名字（正如我们上面的示例），看它什么时候会被丢弃相对简单，因为局部变量定义在它们作用域范围的末尾。然而，正如上述示例所示，不明确地 drop guard 可能导致 mutex 锁定的时间超过所需时间。
+  <p>尽管隐式 drop guard 解锁 mutex 很方便，但是它有时会导致微妙的意外。如果我们使用 let 语句授任 guard 一个名字（正如我们上面的示例），看它什么时候会被丢弃相对简单，因为局部变量定义在它们作用域范围的末尾。然而，正如上述示例所示，不明确地 drop guard 可能导致 mutex 锁定的时间超过所需时间。</p>
 
-  在不给它指定名称的情况下使用 guard 也是可能的，并且有时非常方便。因为 MutexGuard 保护数据的行为像独占引用，我们可以直接使用它，而无需首先为他授任一个名称。例如，你有一个 <code>Mutex&lt;Vec&lt;i32&gt;&gt;</code>，你可以在单个语句中锁定 mutex，将项推入 Vec，并且再次锁定 mutex：
+  </p>在不给它指定名称的情况下使用 guard 也是可能的，并且有时非常方便。因为 MutexGuard 保护数据的行为像独占引用，我们可以直接使用它，而无需首先为他授任一个名称。例如，你有一个 <code>Mutex&lt;Vec&lt;i32&gt;&gt;</code>，你可以在单个语句中锁定 mutex，将项推入 Vec，并且再次锁定 mutex：</p>
   
   <pre>list.lock().unwrap().push(1);</pre>
 
-  任何更大表达式产生的临时值，例如通过 <code>lock()</code> 返回的 guard，将在语句结束后被 drop。尽管这似乎显而易见，但它导致了一个常见的问题，这通常涉及 <code>match</code>、<code>if let</code> 以及 <code>while let</code> 语句。以下是遇到该陷阱的示例：
+  <p>任何更大表达式产生的临时值，例如通过 <code>lock()</code> 返回的 guard，将在语句结束后被 drop。尽管这似乎显而易见，但它导致了一个常见的问题，这通常涉及 <code>match</code>、<code>if let</code> 以及 <code>while let</code> 语句。以下是遇到该陷阱的示例：</p>
 
   <pre>if let Some(item) = list.lock().unwrap().pop() {
     process_item(item);
 }</pre>
 
-  如果我们的旨意就是锁定 list、弹出 item、解锁 list 然后在解锁 list 后处理 item，我们在这里犯了一个微妙而严重的错误。临时的 guard 直到完整的 <code>if let</code> 语句结束后才能被 drop，这意味着我们在处理 item 时不必要地持有锁。
+  <p>如果我们的旨意就是锁定 list、弹出 item、解锁 list 然后在解锁 list 后处理 item，我们在这里犯了一个微妙而严重的错误。临时的 guard 直到完整的 <code>if let</code> 语句结束后才能被 drop，这意味着我们在处理 item 时不必要地持有锁。</p>
 
   或许，意外地是，对于类似地 <code>if</code> 语句，这并不会发生，例如以下示例：
 
@@ -703,9 +702,9 @@ fn main() {
     do_something();
 }</pre>
   
-  在这里，临时的 guard 在 <code>if</code> 语句的主题执行之前就执行 drop 了。该原因是，通常 if 语句的条件总是一个布尔值，它并不能借用任何东西。没有理由将临时的生命周期从条件开始延长到语句的结尾。对于 <code>if let</code> 语句，情况可能并非如此。例如，如果我们使用 `front()`，而不是 `pop()`，项将会从 list 中借用，因此有必要保持 guard 存在。因为借用检查实际上只是一种检查，它并不会影响何时以及什么顺序 drop，所以即使我们使用了 <code>pop()</code>，情况仍然是相同的，尽管那并不是必须的。
+  <p>在这里，临时的 guard 在 <code>if</code> 语句的主题执行之前就执行 drop 了。该原因是，通常 if 语句的条件总是一个布尔值，它并不能借用任何东西。没有理由将临时的生命周期从条件开始延长到语句的结尾。对于 <code>if let</code> 语句，情况可能并非如此。例如，如果我们使用 `front()`，而不是 `pop()`，项将会从 list 中借用，因此有必要保持 guard 存在。因为借用检查实际上只是一种检查，它并不会影响何时以及什么顺序 drop，所以即使我们使用了 <code>pop()</code>，情况仍然是相同的，尽管那并不是必须的。</p>
 
-  我们可以通过将弹出操作移动到单独的 let 语句来避免这种情况。然后在该语句的末尾放下 guard，在 <code>if let</code> 之前：
+  <p>我们可以通过将弹出操作移动到单独的 let 语句来避免这种情况。然后在该语句的末尾放下 guard，在 <code>if let</code> 之前：</p>
 
   <pre>let item = list.lock().unwrap().pop();
 if let Some(item) = item {
