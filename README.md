@@ -1,5 +1,3 @@
-# Rust Atomics and Locks
-
 ## [第一章：Rust 并发基础](./1_Basic_of_Rust_Concurrency.md)
 
 * [Rust 中的线程](./1_Basic_of_Rust_Concurrency.md#rust-中的线程)
@@ -44,9 +42,9 @@
   * [产生和加入](./3_Memory_Ordering.md#产生和加入)
 * [Relaxed 排序](./3_Memory_Ordering.md#relaxed-排序)
 * [Release 和 Acquire 排序](./3_Memory_Ordering.md#release-和-acquire-排序)
-  * [示例：「锁」](./3_Memory_Ordering.md#示例锁)
+  * [示例：锁定](./3_Memory_Ordering.md#示例锁定)
   * [示例：使用间接的方式惰性初始化](./3_Memory_Ordering.md#示例使用间接的方式惰性初始化)
-* [消费排序](./3_Memory_Ordering.md#消费排序)
+* [Consume 排序](./3_Memory_Ordering.md#consume-排序)
 * [顺序一致性排序](./3_Memory_Ordering.md#顺序一致性排序)
 * [屏障（Fence）](./3_Memory_Ordering.md#屏障fence2)
 * [常见的误解](./3_Memory_Ordering.md#常见的误解)
