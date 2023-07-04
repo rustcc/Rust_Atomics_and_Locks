@@ -136,7 +136,7 @@ impl<T> Drop for MutexGuard<'_, T> {
 
 一般来说，从内存安全方面，原子等待和唤醒函数从不会影响正确性。它们仅是一个（非常重要的）优化，以避免忙碌循环。这并不意味着由任何实际标准都无法使用的低效锁将是“正确的”，但是尝试去推理关于不安全的 Rust 代码时，这种见解可能是有帮助的。
 
-<div style="border:medium solid green; color:green;">
+<div class="box">
   <h2 style="text-align: center;">Lock API</h2>
   <p>如果你正在计划将实现 Rust 锁当作一个新的爱好，那么你可能很快对涉及提供安全接口的样板代码感到厌烦。也就是说，UnsafeCell、Sync 实现、守护类型、Deref 实现等等。</p>
 
@@ -262,7 +262,7 @@ fn lock_contended(state: &AtomicU32) {
 
 锁定状态改变后，我们再次尝试将其设定为 1 来锁定它，然后我们再放弃并且开始自旋等待。正如我们之前讨论的，我们调用 `wait()` 后，我们不能在通过设定它的状态到 1 来锁定 mutex，因为这可能导致其它的等待者被忘记。
 
-<div style="border:medium solid green; color:green;">
+<div class="box">
   <h2 style="text-align: center;">Cold 和 Inline 属性</h2>
   
   <p>你可以增加 <code>#[cold]</code> 属性到 <code>lock_contented</code> 函数定义，以帮助编译器理解在常见（未考虑）情况下不调用这个函数，这对 <code>lock</code> 方法的优化有帮助。</p>
@@ -566,7 +566,7 @@ impl Condvar {
 >
 > 这种算法的一个缺点是，不仅是算法的复杂性，同时也显著增加条件变量类型的大小，因为它现在需要跟踪更多的信息。
 
-<div style="border:medium solid green; color:green;">
+<div class="box">
   <h2 style="text-align: center;">惊群问题（Thundering Herd Problem）</h2>
   <p>当使用 notify_one() 唤醒正在等待很多相同事情的线程时，当使用条件变量时可能遇到的高性能问题。</p>
 

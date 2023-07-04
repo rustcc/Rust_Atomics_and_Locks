@@ -176,7 +176,7 @@ fn a2() {
 
 在[第二章](./2_Atomics.md)，我们看见几个用例示例，其中保证个别变量的总修改顺序就足够了，使用 Relaxed 内存排序足够了。然而，如果我们尝试任何超出这些示例更高级的东西，我们将很快发现，需要比 relaxed 更强的保证。
 
-<div style="border:medium solid green; color:green;">
+<div class="box">
   <h2 style="text-align: center;">凭空出现的值</h2>
   <p>在使用 Relaxed 内存排序时，由于缺乏顺序保证，当操作在循环方式下相互依赖时，可能会导致理论上的复杂情况。</p>
 
@@ -272,7 +272,7 @@ fn main() {
 }
 ```
 
-<div style="border:medium solid green; color:green;">
+<div class="box">
   <h2 style="text-align: center;">更正式地</h2>
   <p>当 acquire-load 操作观察 release-store 操作的结果时，就会形成 happens-before 关系。但那是什么意思？</p>
 
@@ -613,7 +613,7 @@ fn main() {
 
 `SeqCst` 屏障既是 release 屏障也是 acquire 屏障（就像 `AcqRel`），同时也是顺序一致性操作的单个总顺序的一部分。然而，只有屏障是总顺序的一部分，但不一定是它之前或之后的原子操作。这意味着，与 release 或 acquire 操作不同，顺序一致性的操作不能拆分为 relaxed 操作和内存屏障。
 
-<div style="border:medium solid green; color:green;">
+<div class="box">
   <h2 style="text-align: center;">编译器屏障</h2>
   <p>除了常规的原子屏障，Rust 标准库还提供了<i>编译器屏障</i>：<code>std::sync::atomic::compiler_fence</code>。它的签名与我们上面讨论的这些常规 <code>fence()</code> 不同，但它的效果仅限于编译器。与原子屏障不同，例如，它并不会阻止处理器重排指令。在绝大多数屏障的用例中，编译器屏障是不够的。</p>
 

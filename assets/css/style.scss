@@ -4,7 +4,6 @@
 @import "{{ site.theme }}";
 
 @media (prefers-color-scheme: dark) {
-
   html,body,.markdown-body {
     background-color: #000;
     color: rgba(235, 240, 238, 0.96);
@@ -19,5 +18,10 @@
     background: rgb(31, 91, 62);
     color: white;
   }
+}
 
+.box {
+  border: medium solid green;
+  color: green;
+  padding: 1rem;
 }
