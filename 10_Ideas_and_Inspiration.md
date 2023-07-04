@@ -8,7 +8,7 @@
 
 *信号量*实际上仅是有两个操作的计数器：*信号*（signal，也叫做 up 或 V）和*等待*（wait，也叫做 down 或 P）。signal 操作增加计数器到一个确定的最大值，而 wait 操作减少计数器的值。如果计数器是 0，wait 操作将阻塞并等待匹配的 signal 操作，以防止计数器将变成负数。这是一个灵活的工具，可以用于实现其它同步原语。
 
-![ ](./picture/raal_10in01.png)
+![ ](https://github.com/fwqaaq/Rust_Atomics_and_Locks/raw/main/picture/raal_10in01.png)
 
 信号量可以实现为用于计数器的 `Mutex<u32>` 以及用于等待操作的 `Condvar` 的组合。然而，有几种方式能更有效地实现它。更值得关注的是，在支持类 futex 操作（[第八章“futex”](./8_Operating_System_Primitives.md#futex)）的平台上，它可以作为单个 AtomicU32（或者甚至 AtomicU8）更高效地实现。
 
@@ -29,7 +29,7 @@
 
 这种模式通常称为 `RCU`，代表“读取、复制、更新”，这些替换数据所需要的步骤。读取指针后，可以将结构体复制进新的分配，无需担心其他线程即可进行修改。准备就绪后，可以使用比较并交换操作（[第二章节的“比较并交换”操作](./2_Atomics.md#比较并交换操作)）来更新原子指针，如果没有其他线程在此期间替换数据，这将成功。
 
-![ ](./picture/raal_10in02.png)
+![ ](https://github.com/fwqaaq/Rust_Atomics_and_Locks/raw/main/picture/raal_10in02.png)
 
 关于 RCU 模式最有趣的部分是最后一步，它没有首字母缩略的单词：重新分配旧数据（deallocating the old data）。成功更新后，如果其他线程在更新前读取指针，它们仍然可能读取旧副本。你必须等待所有这些线程的完成，才能重新分配旧副本。
 
@@ -48,7 +48,7 @@
 
 为了在表开始插入一个新元素，你仅需要分配该元素并将它的指针指向列表中的第一个元素，然后原子更新初始化指针以指向你最新分配到元素。
 
-![ ](./picture/raal_10in03.png)
+![ ](https://github.com/fwqaaq/Rust_Atomics_and_Locks/raw/main/picture/raal_10in03.png)
 
 同样，移除元素可以通过更新元素之前（元素）的指针指向后一个元素来完成。然而，当涉及多个 writer 时，必须处理相邻元素的并发插入或者删除操作。否则，你可能还会意外地并发地移除新插入的元素，或者撤销了并发移除的元素的移除。
 
@@ -71,7 +71,7 @@
 
 在这个列表中的每个元素都需要包含一些字段，这些字段用于唤醒相应的线程，例如 `std::thread::Thread` 对象。一些原子指针未使用的位可以用于存储 mutex 自身的状态，以及管理队列状态的任何所需的东西。
 
-![ ](./picture/raal_10in04.png)
+![ ](https://github.com/fwqaaq/Rust_Atomics_and_Locks/raw/main/picture/raal_10in04.png)
 
 有很多可能的变体。队列可能由它自己的锁位保护，或者也可以实现为（部分地）无锁结构。元素不必在堆上分配，而可以时等待的线程的局部变量。队列可以是一个双向链表，不仅包含指向下一个元素的指针，同时也包含指向前一个元素。第一个元素也包含一个指向最后元素的指针，以便高效地在末尾追加一个元素。
 
@@ -90,7 +90,7 @@ Windows SRW 锁（[第8章中的“一个轻巧的读写锁”](./8_Operating_Sy
 
 全局的数据结构可以是一个 `HashMap`，将内存地址映射到等待该地址的 mutex 的线程队列。全局的数据结构通常叫做 `parking lot`，因为它是一组被阻塞（`park`）的线程合集。
 
-![ ](./picture/raal_10in05.png)
+![ ](https://github.com/fwqaaq/Rust_Atomics_and_Locks/raw/main/picture/raal_10in05.png)
 
 这种模式可以是泛化的，其不仅跟踪 mutex 的队列，同时也还跟踪条件变量和其他原语。通过跟踪任何原子变量的队列，这有效地提供了一种不在原生支持该功能的平台上实现类似 futex 功能的方式。
 
@@ -109,7 +109,7 @@ Windows SRW 锁（[第8章中的“一个轻巧的读写锁”](./8_Operating_Sy
 
 任何读取线程都可以在任何时候，在不阻塞的情况下，通过在前后读取计数器来读取数据。如果来自计数器的两个值是相等的或是偶数，就没有并发更改，这意味着你读取了有效的数据副本。否则，你可能读取的数据被并发地修改了，在这种情况下，你应该再次尝试。
 
-![ ](./picture/raal_10in06.png)
+![ ](https://github.com/fwqaaq/Rust_Atomics_and_Locks/raw/main/picture/raal_10in06.png)
 
 这是一个向其他线程提供数据的绝佳模式，而不会使读线程阻塞写线程。它通常用在操作系统内核和许多嵌入式系统。因为 reader 仅需要对内存的读取访问，并没有涉及指针，因此这可以是一个很好的数据结构，可以在共享内存中安全地使用，在处理器之间，而无需信任 reader。例如，Linux 内核使用这个模式通过为进程提供对（共享）内存的只读访问，非常有效地为进程提供时间戳。
 
