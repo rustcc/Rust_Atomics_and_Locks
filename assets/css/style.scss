@@ -14,10 +14,32 @@
     background: #462e54;
   }
 
+  .box pre {
+    color: white;
+  }
+
   .markdown-body code {
     background: rgb(31, 91, 62);
     color: white;
   }
+
+    h1,
+    h2,
+    h3,
+    h4,
+    h5,
+    h6 {
+      color: rgb(0, 208, 212);
+    }
+  
+    a {
+      color: rgba(96, 255, 220, 0.7);
+    }
+  
+    a:hover {
+      text-decoration: none;
+      color: #04fbc5
+    }
 }
 
 .box {
@@ -26,14 +48,34 @@
   padding: 1rem;
 }
 
-h1, h2, h3, h4, h5, h6 {
-  color: rgb(0, 208, 212);
+h1,
+h2,
+h3,
+h4,
+h5,
+h6 {
+  color: #402e52;
 }
 
 a {
-  color: #04fbc5;
+  color: #4d615f;
 }
 
-a:hover{
+a:hover {
   text-decoration: none;
+  color: #046960;
+}
+
+.markdown-body code {
+  background-color: rgb(51 90 108 / 85%);
+  color: white;
+}
+
+.markdown-body .highlight pre,
+.markdown-body pre {
+  background: #8da7ce87;
+}
+
+.box pre {
+  color: black;
 }
