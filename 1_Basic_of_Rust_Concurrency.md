@@ -219,9 +219,9 @@ error[E0499]: cannot borrow `numbers` as mutable more than once at a time
 
   <p>就在 Rust 1.0 发布之前，人们慢慢发现它似乎不能保证某些东西被 drop。有很多种方式没有 drop 它，例如创建一个引用计数节点的循环，可以忘记某些东西或者*泄漏*它。</p>
 
-  <code>最终，在一些人提及的“泄漏启示录”中得到结论，（安全）接口的设计不能依赖假设对象总是在它们的生命周期结束后 drop。泄漏一个对象可能会导致泄漏更多对象（例如，泄漏一个 Vec 将也导致泄漏它的元素），但它并不会导致未定义行为（undefind behavior）。因此，<code>std::thread::scoped</code> 将不再视为安全的并从标准库移除。此外，<code>std::mem::forget</code> 从一个不安全的函数升级到<i>安全</i>的函数，以强调忘记（或泄漏）总是一种可能性。</code>
+  <p>最终，在一些人提及的“泄漏启示录”中得到结论，（安全）接口的设计不能依赖假设对象总是在它们的生命周期结束后 drop。泄漏一个对象可能会导致泄漏更多对象（例如，泄漏一个 Vec 将也导致泄漏它的元素），但它并不会导致未定义行为（undefind behavior）。因此，<code>std::thread::scoped</code> 将不再视为安全的并从标准库移除。此外，<code>std::mem::forget</code> 从一个不安全的函数升级到<i>安全</i>的函数，以强调忘记（或泄漏）总是一种可能性。</p>
 
-  直到后来，在 Rust 1.63 中，添加了一个新的 <code>std::thread::scope</code> 功能，其新设计不依赖 Drop 来获得正确性。
+  <p>直到后来，在 Rust 1.63 中，添加了一个新的 <code>std::thread::scope</code> 功能，其新设计不依赖 Drop 来获得正确性。</p>
 </div>
 
 ## 共享所有权以及引用计数
@@ -684,7 +684,7 @@ fn main() {
   <h2 style="text-align: center;">MutexGuard 的生命周期</h2>
   <p>尽管隐式 drop guard 解锁 mutex 很方便，但是它有时会导致微妙的意外。如果我们使用 let 语句授任 guard 一个名字（正如我们上面的示例），看它什么时候会被丢弃相对简单，因为局部变量定义在它们作用域范围的末尾。然而，正如上述示例所示，不明确地 drop guard 可能导致 mutex 锁定的时间超过所需时间。</p>
 
-  </p>在不给它指定名称的情况下使用 guard 也是可能的，并且有时非常方便。因为 MutexGuard 保护数据的行为像独占引用，我们可以直接使用它，而无需首先为他授任一个名称。例如，你有一个 <code>Mutex&lt;Vec&lt;i32&gt;&gt;</code>，你可以在单个语句中锁定 mutex，将项推入 Vec，并且再次锁定 mutex：</p>
+  <p>在不给它指定名称的情况下使用 guard 也是可能的，并且有时非常方便。因为 MutexGuard 保护数据的行为像独占引用，我们可以直接使用它，而无需首先为他授任一个名称。例如，你有一个 <code>Mutex&lt;Vec&lt;i32&gt;&gt;</code>，你可以在单个语句中锁定 mutex，将项推入 Vec，并且再次锁定 mutex：</p>
   
   <pre>list.lock().unwrap().push(1);</pre>
 

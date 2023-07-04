@@ -94,7 +94,7 @@ fn b() {
 
 正如以上提及的，基础的 happens-before 规则是同一线程内的任何事情都按顺序发生。因在这个示例中，1 发生在 2 之前，并且 3 发生在 4 之前，正如 3-1 图片所示。因为我们使用 relaxed 内存排序，在我们的示例中并没有其它的 happens-before 关系。
 
-![ ](./picture/raal_0301.png)
+![ ](https://github.com/fwqaaq/Rust_Atomics_and_Locks/raw/main/picture/raal_0301.png)
 图3-1。示例代码中原子操作之间的 happens-before 关系。
 
 如果 a 或 b 的任何一个在另一个开始之前完成，输出将是 0 0 或 10 20。如果 a 和 b 并发地运行，很容易看见输出是 10 0。发生这种操作的方式是，可能以以下顺序写运行：3 1 2 4。
@@ -130,7 +130,7 @@ fn f() {
 
 由于 join 和产生操作形成的 happens-before 关系，我们肯定知道 X 的加载操作在第一个 store 之后，但在随后一个 store 之前，正如在图 3-2 所见。然而，它是否在第二个存储之前或之后观察值是不可预测的。换句话说，它可能是 1 或 2，但不是 0 或 3。
 
-![ ](./picture/raal_0301.png)
+![ ](https://github.com/fwqaaq/Rust_Atomics_and_Locks/raw/main/picture/raal_0301.png)
 图 3-2。示例代码中生成、join、存储和加载操作之间的 happens-before 关系。
 
 ## Relaxed 排序
@@ -240,7 +240,7 @@ fn main() {
 
 当产生的线程完成数据存储时，它使用 release-store 去设置 `READY` 标志为真。当主线程通过它的 acquire-load 操作观察到，在这两个线程之间建立了一个 happens-before 关系，正如图 3-3 所示。此时，我们肯定知道在 release-store 到 READY 之前的所有操作对发生在 acquire-load 之后的所有操作都可见。具体而言，当主线程从 `DATA` 加载时，我们可以肯定它将加载由后台线程存储的值。该程序在最后一行只有一种输出结果：123。
 
-![ ](./picture/raal_0303.png)
+![ ](https://github.com/fwqaaq/Rust_Atomics_and_Locks/raw/main/picture/raal_0303.png)
 
 图 3-3。示例代码中原子操作之间的 happens-before 关系，展示了通过 acquire 和 release 操作形成的跨线程关系。
 
@@ -353,7 +353,7 @@ fn main() {
 
 归功于 acquire 和 release 内存排序，我们肯定没有两个线程能并发地访问数据。正如在图 3-4 展示的，对 DATA 的任何先前访问都在随后使用 release-store 操作将 false 存储到 LOCKED 之前发生，然后在下一个 acquire-compare-exchange（或 acquire-swap）操作中将 false 更改为 true，然后在下一次访问 DATA 之前发生。
 
-![ ](./picture/raal_0304.png)
+![ ](https://github.com/fwqaaq/Rust_Atomics_and_Locks/raw/main/picture/raal_0304.png)
 图 3-4。锁定示例中原子操作之间的 happens-before 关系，显示了两个线程按顺序锁定和解锁。
 
 在[第四章](./4_Building_Our_Own_Spin_Lock.md)，我们将把这个概念变成一个可重复使用的类型：自旋锁。
@@ -409,7 +409,7 @@ fn get_data() -> &'static Data {
 
 图 3-5 显示了三个线程调用 `get_data()` 的情况的操作和发生前关系的可视化。在这种情况下，线程 A 和 B 都观察到一个空指针并都试图去初始化原子指针。线程 A 赢得竞争，导致线程 B 的 compare_exchange 调用失败。线程 C 在通过线程 A 初始化之后观察原子指针。最终结果是，所有三个线程最终都使用由线程 A 分配的 box。
 
-![ ](./picture/raal_0305.png)
+![ ](https://github.com/fwqaaq/Rust_Atomics_and_Locks/raw/main/picture/raal_0305.png)
 图3-5。调用 `get_data()` 的三个线程之间的操作和发生前关系。
 
 ## Consume 排序

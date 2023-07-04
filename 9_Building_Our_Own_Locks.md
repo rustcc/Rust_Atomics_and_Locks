@@ -196,7 +196,7 @@ impl<T> Drop for MutexGuard<'_, T> {
 
 图 9-1 展示了两个线程同时尝试锁定我们的 mutex 操作的情况下的 happens-before 关系。首先线程通过改变状态从 0 到 1 锁定 mutex。此时，第二个线程将无法获取锁，并且在改变状态从 1 到 2 后进入睡眠。当第一个线程解锁 mutex 时，它会交换状态回 0。因为是 2，表示一个等待线程，它调用 `wake_one()` 来唤醒第二个线程。注意，我们不能依赖于唤醒和等待操作之间的任何 happens-before 关系。虽然唤醒操作可能是负责唤醒等待线程的操作，但 happens-before 关系是通过 `acquire` 交换操作建立的，观察 `release` 交换操作存储的值。
 
-![ ](./picture/raal_0901.png)
+![ ](https://github.com/fwqaaq/Rust_Atomics_and_Locks/raw/main/picture/raal_0901.png)
 *图 9-1。两个线程之间 happens-before 的关系同时试图锁定我们的 mutex。*
 
 ### 进一步优化
@@ -412,7 +412,7 @@ impl Condvar {
 
 图 9-2 展示了操作和 happens-before 关系，在这种情况下，一个线程使用 `Condvar::wait()` 等待一些受 mutex 保护的数据更改，并由第二个线程唤醒，该线程修改数据并且调用 `Condvar::wake_one()`。注意，由于解锁和锁定操作，第一次加载操作能够保证观察到递增之前到值。
 
-![ ](./picture/raal_0902.png)
+![ ](https://github.com/fwqaaq/Rust_Atomics_and_Locks/raw/main/picture/raal_0902.png)
 *图 9-2。一个线程使用 `Condvar::wait()` 被另一个使用 `Condvar::notify_one()` 的线程唤醒的操作和 happens-before 的关系。*
 
 我们应该也考虑如果 counter 溢出会发生什么。
