@@ -436,9 +436,239 @@ consume 排序是 acquire 排序的一个轻量级、更高效的变体，其同
 
 ## 顺序一致性排序
 
+一个更强的内存排序时*顺序一致性*排序：`Ordering::SeqCst`。它包含了 acquire 排序（对于 load 操作）以及 release 排序（对于 store 操作）的所有保证，并且*也*保证了全局一致性操作。
+
+这意味着在程序中使用 `SeqCst` 排序的每个操作是所有线程都同意的单个总顺序的一部分。这个总顺序与每个变量的总修改顺序一致。
+
+严格来讲，由于它比 acquire 和 release 内存排序要强，因此顺序一致性 load 或者 store 操作可以取代一对 release-acquire 中的 acquire-load 或 release-store 操作，形成 happens-before 关系。换句话说，acquire-load 不仅可以与 release-store 形成 happens-before 关系，同时也可以和顺序一致的 store 形成 happens-before 关系，同样 release-store 也是如此。
+
+> 仅有当 happens-before 关系的双方使用 SeqCst 时，才能保证与 SeqCst 操作的单个总顺序一致。
+
+虽然这似乎是最容易推理的内存排序，但 SeqCst 排序在实践中几乎从来都没有必要。在几乎所有情况下，通常 acquire 和 release 排序就足够了。
+
+以下是一个取决于顺序一致的有序操作的示例：
+
+```rust
+use std::sync::atomic::Ordering::SeqCst;
+
+static A: AtomicBool = AtomicBool::new(false);
+static B: AtomicBool = AtomicBool::new(false);
+
+static mut S: String = String::new();
+
+fn main() {
+    let a = thread::spawn(|| {
+        A.store(true, SeqCst);
+        if !B.load(SeqCst) {
+            unsafe { S.push('!') };
+        }
+    });
+
+    let b = thread::spawn(|| {
+        B.store(true, SeqCst);
+        if !A.load(SeqCst) {
+            unsafe { S.push('!') };
+        }
+    });
+
+    a.join().unwrap();
+    b.join().unwrap();
+}
+```
+
+两个线程首先设置它们自己的原子布尔值到 true，以告知另一个线程它们正在获取 S，并且然后检查其它的原子变量布尔值，是否它们可以安全地获取 S，而没有导致数据竞争。
+
+如果两个存储操作都发生在任一加载操作之前，则两个线程最终都无法访问 S。然而，两个线程都不可能访问 S 并导致未定义的行为，因为顺序一致的顺序保证了其中只有一个线程可以赢得竞争。在每个可能的单个总的顺序中，单个操作将是 store 操作，这阻止其他线程访问 S。
+
+在实际情况中，几乎所有对 SeqCst 的使用都涉及一种类似的存储模式，在随后在同一线程上加载之前必须全局可见。对于这些情况，一个潜在的更有效的替代方案是将 relaxed 的操作与 SeqCst 屏障结合使用，我们接下来将探索。
+
 ## 屏障（Fence）[^2]
 
+除了对原子变量的额外操作，我们还可以将内存排序应用于：原子屏障。
+
+`std::sync::atomic::fence` 函数表示一个*原子屏障*，它可以是一个 Release 屏障、一个 Acquire 屏障，或者两者都是（AcqRel 或 SeqCst）。SeqCst 屏障还参与顺序一致性的全局排序。
+
+原子屏障允许你从原子操作中分离内存排序。如果你想要应用内存排序到多个操作这可能是有用的，或者你想要有条件地应用内存排序。
+
+本质上，release-store 可以拆分成 release 屏障，然后是（relaxed）store，并且 acquire-load 可以拆分成（relaxed）load，然后是 acquire 屏障：
+
+<div style="columns: 2;column-gap: 20px;column-rule-color: green;column-rule-style: solid;">
+  <div style="break-inside: avoid">
+    release-acquire 关系的 store 操作，
+    <pre>
+    a.store(1, Release);</pre>
+    可以由 release 屏障和随后的 relaxed store 组成：
+    <pre>
+    fence(Release);
+    a.store(1, Relaxed);</pre>
+  </div>
+  <div style="break-inside: avoid">
+    release-acquire 关系的 load 操作，
+      <pre>
+      a.load(Acquire);</pre>
+    可以由 relaxed load 和随后的 acquire 屏障组成：
+    <pre>
+    a.load(Relaxed);
+    fence(Acquire);</pre>
+  </div>
+</div>
+
+不过，使用单独的屏障可能会导致额外的处理器指令，这可能会略微降低效率。
+
+更重要地是，与 release-store 或者 acquire-load 不同，屏障不会与任意单个原子变量捆绑。这意味着单个屏障可以立刻用于多个变量。
+
+从形式上讲，如果 release 屏障在同意线程上的位置紧跟着任何一个原子操作，而该原子操作存储的值被我们要同步的 acquire 操作观察到，那么该 release 屏障可以代替 release 操作，并建立一个 happens-before 关系。同样地，如果一个 acquire 屏障在同一线程上的位置紧接着之前的任何一个原子操作，而该原子操作加载的值是由 release 操作存储的，那么该 acquire 屏障可以替代任何一个 acquire 操作。
+
+综上所述，这意味着如果在 release 屏障之后的任何 store 操作被在 acquire 屏障之前的任何 load 操作所观察，那么在 release 屏障和 acquire 屏障之间将建立 happens-before 关系。
+
+例如，假设我们有一个线程执行一个 release 屏障，然后对不同的变量执行三个原子 store 操作，另一个线程从这些相同的变量执行三个 load 操作，然后是一个 acquire 栅栏，如下所示：
+
+<div style="columns: 2;column-gap: 20px;column-rule-color: green;column-rule-style: solid;">
+  <div style="break-inside: avoid">
+    线程 1：
+    <pre>
+    fence(Release);
+    A.store(1, Relaxed);
+    B.store(2, Relaxed);
+    C.store(3, Relaxed);</pre>
+  </div>
+  <div style="break-inside: avoid">
+    线程 2：
+    <pre>
+    A.load(Relaxed);
+    B.load(Relaxed);
+    C.load(Relaxed);
+    fence(Acquire);</pre>
+  </div>
+</div>
+
+在这种情况下，如果线程 2 上的任意 load 操作从线程 1 上的相应 store 操作加载值，那么线程 1 上的 release 屏障和线程 2 上的 acquire 屏障之间将建立 happens-before 关系。
+
+屏障不必直接在原子操作之前或者之后。它们可以在原子操作之间，包括控制流。这可以用于使栅栏具有条件行，类似于比较且交换操作具有成功和失败的排序。
+
+例如，如果我们从使用 acquire 内存排序的原子变量中加载指针，我们可以使用屏障仅当指针不是空的时候应用 acquire 内存排序：
+
+<div style="columns: 2;column-gap: 20px;column-rule-color: green;column-rule-style: solid;">
+  <div style="break-inside: avoid">
+    使用 acquire-load：
+    <pre>let p = PTR.load(Acquire);
+if p.is_null() {
+    println!("no data");
+} else {
+    println!("data = {}", unsafe { *p });
+}</pre>
+  </div>
+  <div style="break-inside: avoid">
+    使用条件的 acquire 屏障：
+    <pre>let p = PTR.load(Relaxed);
+if p.is_null() {
+    println!("no data");
+} else {
+    fence(Acquire);
+    println!("data = {}", unsafe {*p });
+}</pre>
+  </div>
+</div>
+
+如果指针通常为空，这可能是有益的，在不需要时避免 acquire 内存排序。
+
+让我们来看看一个更复杂的 release 和 acquire 屏障的用例：
+
+```rust
+use std::sync::atomic::fence;
+
+static mut DATA: [u64; 10] = [0; 10];
+
+const ATOMIC_FALSE: AtomicBool = AtomicBool::new(false);
+static READY: [AtomicBool; 10] = [ATOMIC_FALSE; 10];
+
+fn main() {
+    for i in 0..10 {
+        thread::spawn(move || {
+            let data = some_calculation(i);
+            unsafe { DATA[i] = data };
+            READY[i].store(true, Release);
+        });
+    }
+    thread::sleep(Duration::from_millis(500));
+    let ready: [bool; 10] = std::array::from_fn(|i| READY[i].load(Relaxed));
+    if ready.contains(&true) {
+        fence(Acquire);
+        for i in 0..10 {
+            if ready[i] {
+                println!("data{i} = {}", unsafe { DATA[i] });
+            }
+        }
+    }
+}
+```
+
+> `Std::array::from_fn` 是一种执行一定次数并将结果收集到数组中的简单方法。
+
+在这个示例中，10 个线程做了一些计算，并存储它们的结果到一个（非原子）共享变量中。每个线程设置一个原子布尔值，以指示数据已经通过主线程准备好读取，使用一个普通的 release-store。主线程等待半秒，检查所有 10 个布尔值以查看哪些线程已完成，并打印任何准备好的结果。
+
+主线程不使用 10 个 acquire-load 操作来读取布尔值，而是使用 relaxed 的操作和单个 acquire 屏障。它在读取数据之前执行屏障，但前提是有数据要读取。
+
+虽然在这个特定的例子中，投入任何精力进行此类优化可能完全没有必要，但在构建高效的并发数据结构时，这种节省额外获取操作开销的模式可能很重要。
+
+`SeqCst` 屏障既是 release 屏障也是 acquire 屏障（就像 `AcqRel`），同时也是顺序一致性操作的单个总顺序的一部分。然而，只有屏障是总顺序的一部分，但不一定是它之前或之后的原子操作。这意味着，与 release 或 acquire 操作不同，顺序一致性的操作不能拆分为 relaxed 操作和内存屏障。
+
+<div style="border:medium solid green; color:green;">
+  <h2 style="text-align: center;">编译器屏障</h2>
+  除了常规的原子屏障，Rust 标准库还提供了<i>编译器屏障</i>：<code>std::sync::atomic::compiler_fence</code>。它的签名与我们上面讨论的这些常规 <code>fence()</code> 不同，但它的效果仅限于编译器。与原子屏障不同，例如，它并不会阻止处理器重排指令。在绝大多数屏障的用例中，编译器屏障是不够的。
+
+  在实现 Unix 信号处理程序或嵌入式系统上的中断时，可能会出现可能的用例。这些机制可以突然中断一个线程，暂时在同一处理器内核上执行一个不相关的函数。由于它发生在同一处理器内核上，处理器可能影响内存排序的常规方式不适用。（更多细节请参考[第七章](./7_Understanding_the_Processor.md)）在这种情况下，编译器屏障可能阻隔，这样可以节省一条指令并且希望提高性能。
+
+  另一用例涉及进程级内存屏障。这种技术超出了 Rust 内存模型的范畴，并且仅在某些操作系统上受支持：在 Linux 上通过 membarrier 系统调用，在 Windows 上使用 FlushProcessWriterBuffers 函数。它有效地允许一个线程强制向所有并发运行的线程注入（顺序一致性）原子屏障。这使得我们可以使用轻量级的编译器屏障和重型的进程级屏障替换两个匹配的屏障。如果轻量级屏障一侧的代码执行效率更高，这可以提高整体性能。（请参阅 <code>crates.io</code> 上的 membarrier crate 文档，了解更多详细信息和在 Rust 中使用这种屏障的跨平台方法。）
+
+  编译器屏障也可以是一个有趣的工具，用于探索处理器对内存排序的影响。
+
+  在[第七章“一个实验”](./7_Understanding_the_Processor.md#一个实验)中，我们将故意使用编译器屏障替换常规屏障。这将让我们在使用错误的内存顺序时体验到处理器的微妙但潜在的灾难性影响。
+</div>
+
 ## 常见的误解
+
+围绕内存排序有很多误解。在我们结束本章之前，让我们回顾一下最常见的误解。
+
+> 误区：我需要强大的内存排序，以确保更改“立即”可见。
+
+一个常见的误解是，使用像 Relaxed 这样的弱内存排序意味着对原子变量的更改可能永远不会到达另一个线程，或者只有在显著延迟之后才会到达。“Relaxed”这个名字可能会让它听起来像什么都没发生，直到有什么东西迫使硬件被唤醒并执行本该执行的操作。
+
+事实是，内存模型并没有说任何关于时机的事情。它仅定义了某些事情发生的顺序；而不是你要等待多久。假设一台计算机需要数年时间才能将数据从一个线程传输到另一个线程，这完全无法使用，但可以完美地满足内存模型。
+
+在现实生活中，内存排序是关于重新排序指令等事情，这通常以纳秒规模发生。更强的内存排序不会使你的数据传输速度更快；它甚至可能会减慢你的程序速度。
+
+> 误区：禁用优化意味着我不需要关心内存排序。
+
+编译器和处理器在使事情按照我们预期的顺序发生方面起着作用。禁用编译器优化并不能禁用编译器中的每种可能的转换，也不能禁用处理器的功能，这些功能导致指令重新排序和类似的潜在问题行为。
+
+> 误区：使用不重新排序指令的处理器意味着我不需要关心内存排序。
+
+一些简单的处理器，比如小型微控制器中的处理器，只有一个核心，每次只能执行一条指令，并且按顺序执行。然而，虽然在这类设备上，出现错误的内存排序导致实际问题的可能性较低，但编译器仍然可能基于错误的内存排序做出无效的假设，导致代码出错。此外，还需要认识到，即使处理器不会乱序执行指令，它仍可能具有其他与内存排序相关的特性。
+
+> 误区：Relaxed 的操作是免费的。
+
+这是否成立取决于对“免费”一词的定义。的确，Relaxed 是最高效的内存排序，相比其他内存排序可以显著提升性能。事实上，对于所有现代平台，Relaxed 加载和存储操作编译成与非原子读写相同的处理器指令。
+
+如果原子变量只在单个线程中使用，与非原子变量相比，速度上的差异很可能是因为编译器对非原子操作具有更大的自由度并更有效地进行优化。（编译器通常避免对原子变量进行大部分类型的优化。）
+
+然而，从多个线程访问相同的内存通常比从单个线程访问要慢得多。当其他线程开始重复读取该变量时，持续写入原子变量的线程可能会遇到明显的减速，因为处理器核心和它们的缓存现在必须开始协作。
+
+我们将在[第7章](./7_Understanding_the_Processor.md)中探讨这种效应。
+
+> 误区：顺序一致的内存排序是一个很好的默认值，并且总是正确的。
+
+抛开性能问题，顺序一致性内存排序通常被视为默认选择的理想内存排序类型，因为它具有强大的保证。确实，如果任何其他内存排序是正确的，那么 `SeqCst` 也是正确的。这可能让人觉得 `SeqCst` 总是正确的。然而，可能并发算法本身就是不正确的，不论使用哪种内存排序。
+
+更重要的是，在阅读代码时，`SeqCst` 基本上告诉读者：“该操作依赖于程序中每个 `SeqCst` 操作的总顺序”，这是一个极其广泛的声明。如果可能的话，使用较弱的内存排序往往会使相同的代码更容易进行审查和验证。例如，Release 明确告诉读者：“这与同一变量的 acquire 操作相关”，在形成对代码的理解时涉及的考虑要少得多。
+
+建议将 SeqCst 看作是一个警示标志。在实际代码中看到它通常意味着要么涉及到复杂的情况，要么简单地说是作者没有花时间分析其与内存排序相关的假设，这两种情况都需要额外的审查。
+
+> 误区：顺序一致的内存顺序可用于“release-store”或“acquire-load”。
+
+虽然顺序一致性内存排序可以替代 Acquire 或 Release，但它并不能以某种方式创建 acquire-store 或 release-load。这些仍然是不存在的。Release 仅适用于存储操作，而 acquire 仅适用于加载操作。
+
+例如，Release-store 与 SeqCst-store 不会形成任何 release-acquire 关系。如果你希望它们成为全局一致顺序的一部分，两个操作都必须使用 SeqCst。
 
 ## 总结
 
