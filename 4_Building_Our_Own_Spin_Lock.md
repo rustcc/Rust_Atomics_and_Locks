@@ -7,3 +7,7 @@
 ## 使用锁守卫的安全接口
 
 ## 总结
+
+<p style="text-align: center; padding-block-start: 5rem;">
+  <a href="./5_Building_Our_Own_Channels.html">下一篇，第五章：构建我们自己的 Channel</a>
+</p>

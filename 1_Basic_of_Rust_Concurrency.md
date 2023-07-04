@@ -877,6 +877,10 @@ Condvar 的缺点是，它仅能与 Mutex 一起工作，对于大多数用例�
 * 线程阻塞可以是等待某种条件的便捷方式。
 * 当条件是关于由 Mutex 保护的数据时，使用 `Condvar` 时更方便的，并且比线程阻塞更有效。
 
+<p style="text-align: center; padding-block-start: 5rem;">
+  <a href="./2_Atomics.html">下一篇，第二章：Atomic</a>
+</p>
+
 [^1]: <https://zh.wikipedia.org/zh-cn/監視器_(程序同步化)>
 [^2]: <https://zh.wikipedia.org/wiki/互斥锁>
 [^3]: <https://rustwiki.org/zh-CN/std/thread/fn.park.html>

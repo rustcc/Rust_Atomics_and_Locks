@@ -13,3 +13,7 @@
 ### 优化
 
 ## 总结
+
+<p style="text-align: center; padding-block-start: 5rem;">
+  <a href="./7_Understanding_the_Processor.html">下一篇，第七章：理解处理器</a>
+</p>

@@ -33,3 +33,7 @@
 ### 内存屏障
 
 ## 总结
+
+<p style="text-align: center; padding-block-start: 5rem;">
+  <a href="./8_Operating_System_Primitives.html">下一篇，第八章：操作系统原语</a>
+</p>
