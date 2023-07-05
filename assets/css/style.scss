@@ -17,7 +17,7 @@ a:hover {
   color: white;
 }
 
-.markdown-body .highlight pre,
+.markdown-body .highlight,
 .markdown-body pre {
   background: #8da7ce87;
 }
@@ -41,9 +41,25 @@ h6 {
     color: rgba(235, 240, 238, 0.96);
   }
 
-  .markdown-body .highlight pre,
+  .markdown-body .highlight,
   .markdown-body pre {
-    background: #462e54;
+    background: rgba(45, 43, 85);
+
+    .k, .kv, .o {
+      color: rgb(255, 157, 0);
+    }
+
+    .nd, .nn, .nf, .nb {
+      color: rgb(250, 208, 0);
+    }
+
+    .p {
+      color: rgb(222, 236, 252);
+    }
+
+    .mi {
+      color: rgb(236,92,133)
+    }
   }
 
   .box pre {
