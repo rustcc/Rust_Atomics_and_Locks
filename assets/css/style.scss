@@ -3,23 +3,41 @@
 
 @import "{{ site.theme }}";
 
+:root{
+  --light-color-a: #4d6156;
+  --light-color-a-hover: #046960;
+  --light-bg-code: rgba(69, 132, 161, 0.85);
+  --light-bg-pre: #8da7ce87;
+  --light-color-h: #402e52;
+
+  --dark-color-a: rgba(96, 255, 220, 0.7);
+  --dark-color-a-hover: #04fbc5;
+  --dark-bg-code: rgb(31, 91, 62);
+  --dark-bg-pre: rgb(45, 43, 85);
+  --dark-color-h: rgb(0, 208, 212);
+}
+
 a {
-  color: #4d615f;
+  color: var(--light-color-a);
 }
 
 a:hover {
   text-decoration: none;
-  color: #046960;
+  color: var(--light-color-a-hover);
 }
 
 .markdown-body code {
-  background-color: rgba(69, 132, 161, 0.85);
+  background-color: var(--light-bg-code);
   color: white;
 }
 
 .markdown-body .highlight,
 .markdown-body pre {
-  background: #8da7ce87;
+  background: var(--light-bg-pre);
+
+  pre:where(.highlight){
+    background: var(--light-bg-pre);
+  }
 }
 
 .box pre {
@@ -32,7 +50,7 @@ h3,
 h4,
 h5,
 h6 {
-  color: #402e52;
+  color: var(--light-color-h);
 }
 
 @media (prefers-color-scheme: dark) {
@@ -42,10 +60,15 @@ h6 {
   }
 
   .markdown-body .highlight {
-    background: rgb(45, 43, 85);
+    background: var(--dark-bg-pre);
 
+    
     pre:where(.highlight){
-      background: rgb(45, 43, 85);
+      background: var(--dark-bg-pre);
+    }
+
+    .c {
+      color: rgb(179, 98, 255);
     }
 
     .k, .kv, .o {
@@ -66,7 +89,7 @@ h6 {
   }
 
   .markdown-body pre{
-    background: rgb(45, 43, 85);
+    background: var(--dark-bg-pre);
   }
 
   .box pre {
@@ -74,7 +97,7 @@ h6 {
   }
 
   .markdown-body code {
-    background: rgb(31, 91, 62);
+    background: var(--dark-bg-code);
     color: white;
   }
 
@@ -84,16 +107,16 @@ h6 {
     h4,
     h5,
     h6 {
-      color: rgb(0, 208, 212);
+      color: var(--dark-color-h);
     }
   
     a {
-      color: rgba(96, 255, 220, 0.7);
+      color: var(--dark-color-a);
     }
   
     a:hover {
       text-decoration: none;
-      color: #04fbc5
+      color: var(--dark-color-a-hover);
     }
 }
 
@@ -102,3 +125,4 @@ h6 {
   color: green;
   padding: 1rem;
 }
+
