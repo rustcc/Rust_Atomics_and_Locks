@@ -1,7 +1,7 @@
 ## [第一章：Rust 并发基础](./1_Basic_of_Rust_Concurrency.md)
 
 * [Rust 中的线程](./1_Basic_of_Rust_Concurrency.md#rust-中的线程)
-* [线程作用域](./1_Basic_of_Rust_Concurrency.md#线程作用域)
+* [作用域内的线程](./1_Basic_of_Rust_Concurrency.md#作用域内的线程)
 * [共享所有权以及引用计数](./1_Basic_of_Rust_Concurrency.md#共享所有权以及引用计数)
   * [Static](./1_Basic_of_Rust_Concurrency.md#static)
   * [泄漏（Leak）](./1_Basic_of_Rust_Concurrency.md#泄漏leak)
