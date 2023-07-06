@@ -143,6 +143,205 @@ impl<T> Channel<T> {
 
 ## 通过运行时检查来达到安全
 
+为了提供更安全的接口，我们可以增加一些检查，以确保误用会导致 panic 并显示清晰的错误信息，这比未定义行为要好得多。
+
+让我们在消息准备好之前调用 `receive` 方法的问题开始处理。这个问题很容易解决，我们只需要在尝试读消息之前让 receive 方法验证 ready 标识即可：
+
+```rust
+    /// Panics if no message is available yet.
+    ///
+    /// Tip: Use `is_ready` to check first.
+    ///
+    /// Safety: Only call this once!
+    pub unsafe fn receive(&self) -> T {
+        if !self.ready.load(Acquire) {
+            panic!("no message available!");
+        }
+        (*self.message.get()).assume_init_read()
+    }
+```
+
+该函数仍然是不安全的，因为用户仍然需要确保只调用一次，但未能首先检查 `is_ready()` 不再导致未定义行为。
+
+因为我们现在在 `receive` 方法里有一个 `ready` 标识的 acquire-load 操作，其提供了必要的同步，我们可以在 `is_ready` 中使用 Relaxed 内存排序，因为该操作现在仅用于指示目的：
+
+```rust
+    pub fn is_ready(&self) -> bool {
+        self.ready.load(Relaxed)
+    }
+```
+
+> 记住，ready 上的总修改顺序（参见[第三章的“Relaxed 排序”](./3_Memory_Ordering.md#relaxed-排序)）保证了从 `is_ready` 加载 true 之后，receive 也能看到 true。无论 is_ready 使用的内存排序如何，都不会出现 `is_ready` 返回 true，`receive()` 仍然出现 panic 的情况。
+
+下一个要解决的问题是，当调用 receive 不止一次时会发生什么。通过在接收方法中将 `ready` 标志设置回 false，我们也可以很容易地导致 panic，例如：
+
+```rust
+    /// Panics if no message is available yet,
+    /// or if the message was already consumed.
+    ///
+    /// Tip: Use `is_ready` to check first.
+    pub fn receive(&self) -> T {
+        if !self.ready.swap(false, Acquire) {
+            panic!("no message available!");
+        }
+        // Safety: We've just checked (and reset) the ready flag.
+        unsafe { (*self.message.get()).assume_init_read() }
+    }
+```
+
+我们仅是将 load 操作更改为 swap 操作（交换的值为 `false`），突然之间，receive 方法在任何情况下都可以安全地调用。该函数不再标记为不安全。我们现在承担了不安全代码的责任，而不是让用户负责一切，从而减轻了用户的压力。
+
+对于 send，事情稍微复杂一点。为了阻止多个 send 调用同时访问 cell，我们需要知道是否另一个 send 调用已经开始。ready 标识仅告诉我们是否另一个 send 调用已经完成，所以这还不够。
+
+让我们增加第二个标识，命名为 `in_use`，以指示该 channel 是否已经在使用：
+
+```rust
+pub struct Channel<T> {
+    message: UnsafeCell<MaybeUninit<T>>,
+    in_use: AtomicBool, // New!
+    ready: AtomicBool,
+}
+
+impl<T> Channel<T> {
+    pub const fn new() -> Self {
+        Self {
+            message: UnsafeCell::new(MaybeUninit::uninit()),
+            in_use: AtomicBool::new(false), // New!
+            ready: AtomicBool::new(false),
+        }
+    }
+
+    //…
+}
+```
+
+现在我们需要做的就是在访问 cell 之前，在 send 方法中，将 `in_use` 设置为 true，如果它已经由另一个线程设置，则 panic：
+
+```rust
+    /// Panics when trying to send more than one message.
+    pub fn send(&self, message: T) {
+        if self.in_use.swap(true, Relaxed) {
+            panic!("can't send more than one message!");
+        }
+        unsafe { (*self.message.get()).write(message) };
+        self.ready.store(true, Release);
+    }
+```
+
+我们可以为原子 swap 操作使用 relaxed 内存排序，因为 `in_use` 的*总修改顺序*（参见[第三章“Relaxed 排序”](./3_Memory_Ordering.md#relaxed-排序)）保证了在 in_use 上只会有一个 swap 操作返回的 false，而这是 send 方法尝试访问 cell 的唯一情况。
+
+现在我们拥有了一个完全安全的接口，尽管还有一个问题未解决。最后一个问题出现在发送一个永远不会被接收的消息时：它将从不会被 drop。虽然这不会导致未定义行为，并且在安全代码中是允许的，但确实应该避免这种情况。
+
+由于我们在 receive 方法中重置了 ready 标志，修复这个问题很容易：ready 标志指示是否在 cell 中尚未接受的消息需要被 drop。
+
+在我们的 Channel 的 Drop 实现中，我们不需要使用一个原子操作去检查原子 ready 标识，因为只有在在完全由正在 drop 的线程拥有所有权，且没有任何未解除借用的情况下，才能 drop 一个对象。这意味着，我们可以使用 `AtomicBool::get_mut` 方法，它接受一个独占引用（`&mut self`），以证明原子访问是不必要的。对于 UnsafeCell 也是一样，通过 `UnsafeCell::get_mut` 方法来来获取独占引用。
+
+使用它，这是我们完全安全且不泄漏的 channel 的最后一部分：
+
+```rust
+impl<T> Drop for Channel<T> {
+    fn drop(&mut self) {
+        if *self.ready.get_mut() {
+            unsafe { self.message.get_mut().assume_init_drop() }
+        }
+    }
+}
+```
+
+我们试试吧！
+
+由于我们的 channel 仍没有提供一个阻塞的接口，我们将手动地使用线程阻塞去等待消息。只要没有消息准备好，接收线程将 `park()` 自身，并且发送线程将在发送东西后，立刻 `unpark()` 接收者。
+
+这里是一个完整的测试程序，通过我们的 `Channel` 从第二个线程发送字符串字面量“hello world”到主线程：
+
+```rust
+fn main() {
+    let channel = Channel::new();
+    let t = thread::current();
+    thread::scope(|s| {
+        s.spawn(|| {
+            channel.send("hello world!");
+            t.unpark();
+        });
+        while !channel.is_ready() {
+            thread::park();
+        }
+        assert_eq!(channel.receive(), "hello world!");
+    });
+}
+```
+
+该程序编译、运行和干净地退出，表明我们的 Channel 正常工作。
+
+如果我们复制了 send 行，我们也可以在运行中看到我们的安全检查，当运行程序时，产生以下 panic：
+
+```txt
+thread '<unnamed>' panicked at 'can't send more than one message!', src/main.rs
+```
+
+尽管 panic 程序并不出色，但是程序可靠的 panic 比坑的未定义行为错误好太多。
+
+<div class="box">
+  <h2 style="text-align: center;">为 Channel 状态使用单原子</h2>
+  
+  <p>如果你对 channel 实现还不满意，这里有一个微妙的变体，可以节省一字节的内存。</p>
+
+  <p>我们使用单个原子 <code>AtomicU8</code> 表示所有 4 个状态，而不是使用两个分开的布尔值去表示 channel 的状态。我们必须使用 <code>compare_exchange</code> 来原子地检查 channel 是否处于预期状态，并将其更改为另一个状态，而不是原子交换布尔值。</p>
+
+  <pre>const EMPTY: u8 = 0;
+const WRITING: u8 = 1;
+const READY: u8 = 2;
+const READING: u8 = 3;
+
+pub struct Channel<T> {
+    message: UnsafeCell<MaybeUninit<T>>,
+    state: AtomicU8,
+}
+
+unsafe impl<T: Send> Sync for Channel<T> {}
+
+impl<T> Channel<T> {
+    pub const fn new() -> Self {
+        Self {
+            message: UnsafeCell::new(MaybeUninit::uninit()),
+            state: AtomicU8::new(EMPTY),
+        }
+    }
+
+    pub fn send(&self, message: T) {
+        if self.state.compare_exchange(
+            EMPTY, WRITING, Relaxed, Relaxed
+        ).is_err() {
+            panic!("can't send more than one message!");
+        }
+        unsafe { (*self.message.get()).write(message) };
+        self.state.store(READY, Release);
+    }
+
+    pub fn is_ready(&self) -> bool {
+        self.state.load(Relaxed) == READY
+    }
+
+    pub fn receive(&self) -> T {
+        if self.state.compare_exchange(
+            READY, READING, Acquire, Relaxed
+        ).is_err() {
+            panic!("no message available!");
+        }
+        unsafe { (*self.message.get()).assume_init_read() }
+    }
+}
+
+impl<T> Drop for Channel<T> {
+    fn drop(&mut self) {
+        if *self.state.get_mut() == READY {
+            unsafe { self.message.get_mut().assume_init_drop() }
+        }
+    }
+}</pre>
+
+</div>
+
 ## 通过类型来达到安全
 
 ## 借用以避免分配
