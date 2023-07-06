@@ -1,6 +1,6 @@
 # 第五章：构建我们自己的 Channel
 
-*Channel* 可以被用于在线程之间发送数据，并且它们有很多变体。一些 channel 仅能在一个发送方和一个接收方之间使用，而另一些可以在任意数量的线程之间发送，或者甚至允许多个接收放。一些 channel 是阻塞的，这意味着接收（有时也包括发送）是一个阻塞操作，这会使线程进入睡眠状态，知道你的操作完成。一些 channel 针对团兔粮进行优化，而另一些针对低延迟进行优化。
+*Channel* 可以被用于在线程之间发送数据，并且它们有很多变体。一些 channel 仅能在一个发送者和一个接收者之间使用，而另一些可以在任意数量的线程之间发送，或者甚至允许多个接收者。一些 channel 是阻塞的，这意味着接收（有时也包括发送）是一个阻塞操作，这会使线程进入睡眠状态，知道你的操作完成。一些 channel 针对团兔粮进行优化，而另一些针对低延迟进行优化。
 
 这些变体是无穷尽的，没有一种通用版本在所有场景都适合的。
 
@@ -173,7 +173,7 @@ impl<T> Channel<T> {
 
 > 记住，ready 上的总修改顺序（参见[第三章的“Relaxed 排序”](./3_Memory_Ordering.md#relaxed-排序)）保证了从 `is_ready` 加载 true 之后，receive 也能看到 true。无论 is_ready 使用的内存排序如何，都不会出现 `is_ready` 返回 true，`receive()` 仍然出现 panic 的情况。
 
-下一个要解决的问题是，当调用 receive 不止一次时会发生什么。通过在接收方法中将 `ready` 标志设置回 false，我们也可以很容易地导致 panic，例如：
+下一个要解决的问题是，当调用 receive 不止一次时会发生什么。通过在接收者法中将 `ready` 标志设置回 false，我们也可以很容易地导致 panic，例如：
 
 ```rust
     /// Panics if no message is available yet,
@@ -343,6 +343,167 @@ impl<T> Drop for Channel<T> {
 </div>
 
 ## 通过类型来达到安全
+
+尽管我们已经成功地保护了我们 Channel 的用户免受未定义行为的问题，但是如果它们偶尔地不正确使用它，它们仍然有 panic 的风险。理想情况下，编译器将在程序运行之前检查正确的用法并指出滥用。
+
+让我们来看看调用 send 或 receive 不止一次的问题。
+
+为了防止函数被多次调用，我们可以让它*按值*接受参数，对于非 `Copy` 类型，这将消耗对象。对象被消耗或移动后，它会从调用者那里消失，防止它再次被使用。
+
+通过将调用 send 或 receive 表示的能力作为单独的（非 `Copy`）类型，并在执行操作时消费对象，我们可以确保每个操作只能发生一次。
+
+这给我们带来了以下接口设计，而不是单个 `Channel` 类型，一个 channel 由一对 `Sender` 和 `Receiver` 表示，它们各自都有以值接收 `self` 的方法：
+
+```rust
+pub fn channel<T>() -> (Sender<T>, Receiver<T>) { … }
+
+pub struct Sender<T> { … }
+pub struct Receiver<T> { … }
+
+impl<T> Sender<T> {
+    pub fn send(self, message: T) { … }
+}
+
+impl<T> Receiver<T> {
+    pub fn is_ready(&self) -> bool { … }
+    pub fn receive(self) -> T { … }
+}
+```
+
+用户可以通过调用 `channel()` 创建一个 channel，这将给他们一个 Sender 和一个 Receiver。它们可以自由地传递每个对象，将它们移动到另一个线程，等等。然而，它们最终不能获得其中任何一个的多个副本，这保证了 send 和 receive 仅被调用一次。
+
+为了实现这一点，我们需要为我们的 UnsafeCell 和 AtomicBool 找到一个位置。之前，我们仅有一个具有这些字段的结构体，但是现在我们有两个单独的结构体，每个结构体都可能存在更长的时间。
+
+因为 sender 和 receiver 将需要共享这些变量的所有权，我们将使用 Arc（[第一章“引用计数”](./1_Basic_of_Rust_Concurrency.md#引用计数)）为我们提供引用计数的共享分配，我们将在其中存储共享的 Channel 对象。正如以下展示的，Channel 类型不必是公共的，因为它的存在是与用户无关的细节。
+
+```rust
+pub struct Sender<T> {
+    channel: Arc<Channel<T>>,
+}
+
+pub struct Receiver<T> {
+    channel: Arc<Channel<T>>,
+}
+
+struct Channel<T> { // no longer `pub`
+    message: UnsafeCell<MaybeUninit<T>>,
+    ready: AtomicBool,
+}
+
+unsafe impl<T> Sync for Channel<T> where T: Send {}
+```
+
+就像之前一样，我们在 T 是 Send 的情况下为 `Channel<T>` 实现了 `Sync`，以允许它跨线程使用。
+
+注意，我们不再像我们之前 channel 实现中的那样，需要 `in_use` 原子布尔值。它仅通过 send 来检查它有没有被调用超过一次，现在通过类型系统静态地保证。
+
+channel 函数去创建一个 channel 和一对 sender-receiver，它与我们之前的 `Channel::new` 函数类似，除了 Channel 包裹了一个 Arc，并将该 Arc 和其克隆包装在 Sender 和 Receiver 类型中：
+
+```rust
+pub fn channel<T>() -> (Sender<T>, Receiver<T>) {
+    let a = Arc::new(Channel {
+        message: UnsafeCell::new(MaybeUninit::uninit()),
+        ready: AtomicBool::new(false),
+    });
+    (Sender { channel: a.clone() }, Receiver { channel: a })
+}
+```
+
+`send`、`is_ready` 和 `receive` 方法与我们之前实现的方法基本相同，但有一些区别：
+
+* 它们现在被移动到它们各自的类型中，因此只有（单个）发送者可以发送，并且只有（单个）接收者可以接收。
+* 发送和接收现在通过值而不是引用来接收 `self`，以确保它们每个只能被调用一次。
+* 发送不再 panic，因为它的先决条件（只被调用一次）现在被静态保证。
+
+所以，他们现在看起来像这样：
+
+```rust
+impl<T> Sender<T> {
+    /// This never panics. :)
+    pub fn send(self, message: T) {
+        unsafe { (*self.channel.message.get()).write(message) };
+        self.channel.ready.store(true, Release);
+    }
+}
+
+impl<T> Receiver<T> {
+    pub fn is_ready(&self) -> bool {
+        self.channel.ready.load(Relaxed)
+    }
+
+    pub fn receive(self) -> T {
+        if !self.channel.ready.swap(false, Acquire) {
+            panic!("no message available!");
+        }
+        unsafe { (*self.channel.message.get()).assume_init_read() }
+    }
+}
+```
+
+receive 函数仍然可以 panic，因为用户可能仍然会在 `is_ready()` 返回 `true` 之前调用它。它仍然使用 `swap` 将 ready 标志设置回 false（而不仅仅是 load 操作），以便 Channel 的 Drop 实现知道是否有需要删除的未读消息。
+
+该 Drop 实现与我们之前实现的完全相同：
+
+```rust
+impl<T> Drop for Channel<T> {
+    fn drop(&mut self) {
+        if *self.ready.get_mut() {
+            unsafe { self.message.get_mut().assume_init_drop() }
+        }
+    }
+}
+```
+
+当 `Sender<T>` 或者 `Receiver<T>` 被 drop 时，`Arc<Channel<T>>` 的 Drop 实现将减少分配的引用计数。当 drop 到第二个时，计数达到 0，并且 `Channel<T>` 自身被 drop。这将调用我们上面的 Drop 实现，如果已发送但未收到消息，我们将 drop 该消息。
+
+让我们尝试它：
+
+```rust
+fn main() {
+    thread::scope(|s| {
+        let (sender, receiver) = channel();
+        let t = thread::current();
+        s.spawn(move || {
+            sender.send("hello world!");
+            t.unpark();
+        });
+        while !receiver.is_ready() {
+            thread::park();
+        }
+        assert_eq!(receiver.receive(), "hello world!");
+    });
+}
+```
+
+有一点不方便的是，我们仍然得手动地使用线程阻塞去等待一个消息，但是我们稍后将处理这个问题。
+
+目前，我们的目标是在编译时使至少一种形式的滥用变得不可能。与过去不同，试图发送两次不会导致程序 Panic，相反，根本不会导致有效的程序。如果我们向上述工作程序增加另一个 send 调用，编译器现在捕捉问题并可能告知我们错误信息：
+
+```txt
+error[E0382]: use of moved value: `sender`
+  --> src/main.rs
+   |
+   |             sender.send("hello world!");
+   |                    --------------------
+   |                     `sender` moved due to this method call
+   |
+   |             sender.send("second message");
+   |             ^^^^^^ value used here after move
+   |
+note: this function takes ownership of the receiver `self`, which moves `sender`
+  --> src/lib.rs
+   |
+   |     pub fn send(self, message: T) {
+   |                 ^^^^
+   = note: move occurs because `sender` has type `Sender<&str>`,
+           which does not implement the `Copy` trait
+```
+
+根据情况，设计一个在编译时捕捉错误的接口可能非常棘手。如果这种情况确实适合这样的接口，它不仅可以为用户带来更多的便利，还可以减少运行时检查的数量，因为这些检查在静态上已经得到保证。例如，我们不再需要 `in_use` 标志，并从发送者法中移除了交换和检查步骤。
+
+不幸的是，可能会出现新的问题，这可能导致运行时开销。在这种情况下，问题是拆分所有权，我们不得不使用 Arc 并承受 Arc 的代价。
+
+不得不在安全性、便利性、灵活性、简单性和性能之间进行权衡是不幸的，但有时是不可避免的。Rust通常致力于在这些方面取得最佳表现，但有时为了最大化某个方面的优势，我们需要在其中做出一些妥协。
 
 ## 借用以避免分配
 
