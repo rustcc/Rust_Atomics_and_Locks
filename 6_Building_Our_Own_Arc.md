@@ -1,12 +1,12 @@
 # 第六章：构建我们自己的“Arc”
 
-在[第一章“引用计数”](./1_Basic_of_Rust_Concurrency.md#引用计数)中，我们了解了 `std::sync::Arc<T>` 类型允许通过引用计数共享所有权。`Arc::new` 函数创建一个新的分配，就像 `Box::new`。然而，与 Box 不同的是，克隆 Arc 将共享原始分配，而不是创建一个新的。只有当 Arc 和所有其他的克隆被 drop，共享分配才会被 drop。
+在[第一章“引用计数”](./1_Basic_of_Rust_Concurrency.md#引用计数)中，我们了解了 `std::sync::Arc<T>` 类型允许通过引用计数共享所有权。`Arc::new` 函数创建一个新分配的内存，就像 `Box::new`。然而，与 Box 不同的是，克隆 Arc 将共享原始的内存分配，而不是创建一个新的。只有当 Arc 和所有其他的克隆被 drop，共享分配的内存才会被 drop。
 
 这种类型的实现所涉及的内存排序可能是非常有趣的。在本章中，我们将通过实现我们自己的 `Arc<T>` 将更多理论付诸实践。我们将开始一个基础的版本，然后将其扩展到支持循环结构的 *weak 指针*，并且最终将其优化为一个与标准库差不多的实现结束本章。
 
 ## 基础的引用计数
 
-我们的第一个版本将使用单个 `AtomicUsize` 去计数 Arc 对象共享内存分配的数量。让我们开始使用一个持有计数器和 T 对象的结构体：
+我们的第一个版本将使用单个 `AtomicUsize` 去计数 Arc 对象共享分配的数量。让我们开始使用一个持有计数器和 T 对象的结构体：
 
 ```rust
 struct ArcData<T> {
@@ -21,7 +21,7 @@ struct ArcData<T> {
 
 使用 `Box<ArcDate<T>>` 作为包装器，并使用标准的 Box 来处理 `ArcData<T>` 的内存分配可能很诱人。然而，Box 表示独占所有权，并不是共享所有权。我们不能使用引用，因为我们不仅要借用其他所有权的数据，并且它的生命周期（“直到此 Arc 的最后一个克隆被 drop”）无法直接表示为 Rust 的生命周期。
 
-相反，我们将不得不使用指针，并手动处理内存分配以及所有权的概念。我们将使用 `std::ptr::NonNull<T>`，而不是 `*mut T` 或 `*const T`，它表示一个永远不会为空的指向 T 的指针。这样，使用 None 的空指针表示 `Option<Arc<T>>` 与 `Arc<T>` 的大小相同。
+相反，我们将不得不使用指针，并手动处理分配内存以及所有权的概念。我们将使用 `std::ptr::NonNull<T>`，而不是 `*mut T` 或 `*const T`，它表示一个永远不会为空的指向 T 的指针。这样，使用 None 的空指针表示 `Option<Arc<T>>` 与 `Arc<T>` 的大小相同。
 
 ```rust
 use std::ptr::NonNull;
@@ -40,7 +40,7 @@ unsafe impl<T: Send + Sync> Send for Arc<T> {}
 unsafe impl<T: Send + Sync> Sync for Arc<T> {}
 ```
 
-对于 `Arc<T>::new`，我们必须使用引用计数为 1 的 `ArcData<T>` 创建一个新的内存分配。我们将使用 `Box::new` 创建新的内存分配，使用 `Box::leak` 放弃我们对此分配内存的独占所有权，以及使用 `NonNull::from` 将其转换为指针：
+对于 `Arc<T>::new`，我们必须使用引用计数为 1 的 `ArcData<T>` 创建一个新分配的内存。我们将使用 `Box::new` 创建新分配的内存，使用 `Box::leak` 放弃我们对此分配内存的独占所有权，以及使用 `NonNull::from` 将其转换为指针：
 
 ```rust
 impl<T> Arc<T> {
