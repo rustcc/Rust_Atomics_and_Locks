@@ -7,7 +7,7 @@
   --light-color-a: #4d6156;
   --light-color-a-hover: #046960;
   --light-bg-code: rgba(69, 132, 161, 0.85);
-  --light-bg-pre: #8da7ce87;
+  --light-bg-pre: rgb(240, 236, 224);
   --light-color-h: #402e52;
 
   --dark-color-a: rgba(96, 255, 220, 0.7);
@@ -37,6 +37,31 @@ a:hover {
 
   pre:where(.highlight){
     background: var(--light-bg-pre);
+  }
+
+  .c {
+    color: rgb(147, 161, 161);
+  }
+
+  .k,
+  .kv,
+  .o {
+    color: rgb(133, 153, 0);
+  }
+    
+  .nd,
+  .nn,
+  .nf,
+  .nb {
+    color: rgb(38, 139, 210);
+  }
+    
+  .p {
+    color: rgb(255, 215, 0);
+  }
+    
+  .mi {
+    color: rgb(42, 161, 152)
   }
 }
 
