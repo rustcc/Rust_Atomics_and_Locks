@@ -4,17 +4,25 @@
 @import "{{ site.theme }}";
 
 :root{
+  --light-color-theme: rgb(101, 123, 131);
+  --light-bg-theme: #fff;
   --light-color-a: #4d6156;
   --light-color-a-hover: #046960;
   --light-bg-code: rgba(69, 132, 161, 0.85);
-  --light-bg-pre: #8da7ce87;
+  --light-bg-pre: rgb(240, 236, 224);
   --light-color-h: #402e52;
 
+  --dark-color-theme: var(--light-bg-theme);
+  --dark-bg-theme: #000;
   --dark-color-a: rgba(96, 255, 220, 0.7);
   --dark-color-a-hover: #04fbc5;
   --dark-bg-code: rgb(31, 91, 62);
   --dark-bg-pre: rgb(45, 43, 85);
   --dark-color-h: rgb(0, 208, 212);
+}
+
+html,body, .markdown-body {
+  color: var(--light-color-theme);
 }
 
 a {
@@ -34,14 +42,42 @@ a:hover {
 .markdown-body .highlight,
 .markdown-body pre {
   background: var(--light-bg-pre);
-
   pre:where(.highlight){
     background: var(--light-bg-pre);
   }
-}
 
-.box pre {
-  color: black;
+  code.language-txt {
+    color: var(--light-color-theme);
+  }
+  
+  .c {
+    color: rgb(147, 161, 161);
+  }
+
+  .n{
+    color:rgb(101, 123, 131);
+  }
+
+  .k,
+  .kv,
+  .o {
+    color: rgb(133, 153, 0);
+  }
+    
+  .nd,
+  .nn,
+  .nf,
+  .nb {
+    color: rgb(38, 139, 210);
+  }
+    
+  .p {
+    color: rgb(255, 215, 0);
+  }
+    
+  .mi {
+    color: rgb(42, 161, 152)
+  }
 }
 
 h1,
@@ -53,22 +89,39 @@ h6 {
   color: var(--light-color-h);
 }
 
+.box {
+  border: medium solid green;
+  color: green;
+  padding: 1rem;
+  pre {
+      color: black;
+  }
+}
+
 @media (prefers-color-scheme: dark) {
   html,body,.markdown-body {
-    background-color: #000;
-    color: rgba(235, 240, 238, 0.96);
+    background-color: var(--dark-bg-theme);
+    color: var(--dark-color-theme);
   }
 
-  .markdown-body .highlight {
+  .markdown-body .highlight,
+  .markdown-body pre {
     background: var(--dark-bg-pre);
 
-    
     pre:where(.highlight){
       background: var(--dark-bg-pre);
     }
 
+    code.language-txt {
+      color: var(--dark-color-theme);
+    }
+
     .c {
       color: rgb(179, 98, 255);
+    }
+    
+    .n {
+      color: #fff;
     }
 
     .k, .kv, .o {
@@ -88,41 +141,28 @@ h6 {
     }
   }
 
-  .markdown-body pre{
-    background: var(--dark-bg-pre);
-  }
-
   .box pre {
-    color: white;
+    color: var(--dark-color-theme);
   }
 
   .markdown-body code {
     background: var(--dark-bg-code);
-    color: white;
   }
 
-    h1,
-    h2,
-    h3,
-    h4,
-    h5,
-    h6 {
-      color: var(--dark-color-h);
-    }
-  
-    a {
-      color: var(--dark-color-a);
-    }
-  
-    a:hover {
-      text-decoration: none;
-      color: var(--dark-color-a-hover);
-    }
-}
+  h1,
+  h2,
+  h3,
+  h4,
+  h5,
+  h6 {
+    color: var(--dark-color-h);
+  }
 
-.box {
-  border: medium solid green;
-  color: green;
-  padding: 1rem;
-}
+  a {
+    color: var(--dark-color-a);
+  }
 
+  a:hover {
+    color: var(--dark-color-a-hover);
+  }
+}
