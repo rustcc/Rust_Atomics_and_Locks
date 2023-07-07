@@ -507,7 +507,218 @@ note: this function takes ownership of the receiver `self`, which moves `sender`
 
 ## 借用以避免分配
 
+我们刚刚基于 Arc 的 channel 实现的设计可以非常方便的使用——代价是一些性能，因为它得分配内存。如果我们想要优化效率，我们可以通过用户对共享的 Channel 对象负责来获取一些性能。我们可以强制用户去创建一个通过可以由 Sender 和 Receiver 借用的 Channel，而不是在幕后处理 Channel 的分配和所有权。这样，它们可以选择简单地放置 Channel 在局部变量中，从而避免分配内存的开销。
+
+我们将也在一定程度上牺牲简洁性，因为我们现在不得不处理借用和生命周期。
+
+因此，这三种类型现在看起来如下，Channel 再次公开，Sender 和 Receiver 借用它一段时间。
+
+```rust
+pub struct Channel<T> {
+    message: UnsafeCell<MaybeUninit<T>>,
+    ready: AtomicBool,
+}
+
+unsafe impl<T> Sync for Channel<T> where T: Send {}
+
+pub struct Sender<'a, T> {
+    channel: &'a Channel<T>,
+}
+
+pub struct Receiver<'a, T> {
+    channel: &'a Channel<T>,
+}
+```
+
+我们没有使用 `channel()` 函数来创建一对 Sender 和 Receiver，而是回到本章节使用的 `Channel::new`，这允许用户为此类对象创建局部变量。
+
+此外，我们需要一种方法，让用户创建将借用 Channel 的 Sender 和 Receiver 对象。这将需要是一个独占借用（`&mut Channel`），以确保同一 channel 不能有多个发送者或接收者。通过同时提供 Sender 和 Receiver，我们可以将独占引用*分成*两个共享借用，这样发送者和接收者都可以引用 channel，同时防止其他任何东西接触 channel。
+
+这导致我们实现以下内容：
+
+```rust
+impl<T> Channel<T> {
+    pub const fn new() -> Self {
+        Self {
+            message: UnsafeCell::new(MaybeUninit::uninit()),
+            ready: AtomicBool::new(false),
+        }
+    }
+
+    pub fn split<'a>(&'a mut self) -> (Sender<'a, T>, Receiver<'a, T>) {
+        *self = Self::new();
+        (Sender { channel: self }, Receiver { channel: self })
+    }
+}
+```
+
+`split` 方法使用一个极其复杂的签名，值得好好观察。它通过一个独占引用独占地借用 `self`，但它分成了两个共享引用，包装在 Sender 和 Receiver 类型中。`'a` 生命周期清楚地表明，这两个对象借用了有限的生命周期的东西；在这种情况下，是 Channel 本身的生命周期。由于 Channel 是独占地借用，只要 Sender 或 Receiver 对象存在，调用者不能去借用或者移动它。
+
+然而，一旦这些对象都不再存在，可变的借用就会过期，编译器会愉快地让 Channel 对象通过第二次调用 `split()` 再次被借用。尽管我们可以假设在 Sender 和 Receiver 存在时，不能再次调用 `split()`，我们不能阻止在这些对象被 drop 或者遗忘后再次调用 `split()`。我们需要确保我们不能偶然地在 channel 已经有它的 ready 标志设置的情况下创建新的 Sender 或 Receiver 对象，因为这将打包阻止未定义行为的假设。
+
+通过在 `split()` 中用新的空 channel 覆盖 `*self`，我们确保它在创建 Sender 和 Receiver 状态时处于预期状态。这也会在旧的 `*self` 上调用 Drop 实现，它将负责 drop 之前发送但从未接收的消息。
+
+> 由于 split 的签名的生命周期来自 `self`，它可以被省略。上面片段的 `split` 签名与这个不太冗长的版本相同
+>
+> ```rust
+> pub fn split(&mut self) -> (Sender<T>, Receiver<T>) { … }
+> ```
+>
+> 虽然此版本没有明确显示返回的对象借用了 self，但编译器仍然与更冗长的版本完全一样检查生命周期的正确使用情况。
+
+其余的方法和 Drop 实现与我们基于 Arc 的实现相同，除了 Sender 和 Receiver 类型的额外 `'_` 生命周期参数。（如果你忘记了这些，编译器会建议添加它们。）
+
+为了完全起效，以下是剩余的代码：
+
+```rust
+impl<T> Sender<'_, T> {
+    pub fn send(self, message: T) {
+        unsafe { (*self.channel.message.get()).write(message) };
+        self.channel.ready.store(true, Release);
+    }
+}
+
+impl<T> Receiver<'_, T> {
+    pub fn is_ready(&self) -> bool {
+        self.channel.ready.load(Relaxed)
+    }
+
+    pub fn receive(self) -> T {
+        if !self.channel.ready.swap(false, Acquire) {
+            panic!("no message available!");
+        }
+        unsafe { (*self.channel.message.get()).assume_init_read() }
+    }
+}
+
+impl<T> Drop for Channel<T> {
+    fn drop(&mut self) {
+        if *self.ready.get_mut() {
+            unsafe { self.message.get_mut().assume_init_drop() }
+        }
+    }
+}
+```
+
+让我们来测试它！
+
+```rust
+fn main() {
+    let mut channel = Channel::new();
+    thread::scope(|s| {
+        let (sender, receiver) = channel.split();
+        let t = thread::current();
+        s.spawn(move || {
+            sender.send("hello world!");
+            t.unpark();
+        });
+        while !receiver.is_ready() {
+            thread::park();
+        }
+        assert_eq!(receiver.receive(), "hello world!");
+    });
+}
+```
+
+与基于 Arc 的版本相比，便利性的减少非常小：我们只需要多一行代码来手动创建一个 Channel 对象。然而，请注意，channel 必须在作用域之前创建，以向编译器证明其存在超过 Sender 和 Receiver 的时间。
+
+要查看编译器的借用检查器的实际操作，请尝试在各个地方添加对 `channel.split()` 的第二次调用。你将看到，在线程作用域内第二次调用它会导致错误，而在作用域之后调用它是可以接受的。即使在作用域之前调用 `split()` 也没问题，只要你在作用域开始之前停止使用返回的 Sender 和 Receiver 。
+
 ## 阻塞
+
+让我们最终处理一下我们 Channel 最后留下的最大不便，阻塞接口的缺乏。我们测试一个新的 channel 变体，每次都使用线程阻塞函数。将这种模式本身整合到 channel 应该不是太难。
+
+为了能够释放接收者，发送者需要知道去释放哪个线程。`std::thread::Thread` 类型表示线程的句柄，正是我们调用 `unpark()` 所需要的。我们将把句柄存储到 Sender 对象内的接收线程，如下所示：
+
+```rust
+use std::thread::Thread;
+
+pub struct Sender<'a, T> {
+    channel: &'a Channel<T>,
+    receiving_thread: Thread, // New!
+}
+```
+
+然而，如果 Receiver 对象在线程之间发送，该句柄将引用错误的线程。Sender 将不会意识到这个，并且仍然会参考最初持有 Receiver 的线程。
+
+我们可以通过使 Receiver 更具限制性，不再允许它在线程之间发送来处理这个问题。正如[第1章“线程安全：Send 和 Sync”](./1_Basic_of_Rust_Concurrency.md#线程安全send-和-sync)中所讨论的，我们可以使用特殊的 `PhantomData` 标记类型将此限制添加到我们的结构中。`PhantomData<*const ()>` 将完成这项工作，因为原始指针，如 `*const ()`，不实现发送：
+
+```rust
+pub struct Receiver<'a, T> {
+    channel: &'a Channel<T>,
+    _no_send: PhantomData<*const ()>, // New!
+}
+```
+
+接下来，我们必须修改 `Channel::split` 方法来填充新字段，例如：
+
+```rust
+    pub fn split<'a>(&'a mut self) -> (Sender<'a, T>, Receiver<'a, T>) {
+        *self = Self::new();
+        (
+            Sender {
+                channel: self,
+                receiving_thread: thread::current(), // New!
+            },
+            Receiver {
+                channel: self,
+                _no_send: PhantomData, // New!
+            }
+        )
+    }
+```
+
+我们使用当前线程的句柄来填充 `receiving_thread` 字段，因为我们返回的 Receiver 对象将保留在当前线程上。
+
+正如以下展示的，`send` 方法并不做改变。我们仅在 `receiving_thread` 字段上调用 `unpark()` 去唤醒接收者，以防止它正在等待：
+
+```rust
+impl<T> Sender<'_, T> {
+    pub fn send(self, message: T) {
+        unsafe { (*self.channel.message.get()).write(message) };
+        self.channel.ready.store(true, Release);
+        self.receiving_thread.unpark(); // New!
+    }
+}
+```
+
+receive 函数发生的变化稍大。如果它仍然没有消息，新版本不会 panic，而是使用 `thread::park()` 等待消息并再次尝试，并根据需要多次重试。
+
+```rust
+impl<T> Receiver<'_, T> {
+    pub fn receive(self) -> T {
+        while !self.channel.ready.swap(false, Acquire) {
+            thread::park();
+        }
+        unsafe { (*self.channel.message.get()).assume_init_read() }
+    }
+}
+```
+
+> 请记住，`thread::park()` 可能会虚假返回。（或者因为除了我们的 send 方法以外的其它原因调用了 `unpark()`。）这意味着我们不能假设 `park()` 返回时已经设置了 ready 标志。因此，我们需要使用一个循环，在唤醒后再次检查 ready 标识。
+
+`Channel<T>` 结构体、它的 Sync 实现、它的心函数以及它的 Drop 实现保持不变。
+
+让我们尝试它！
+
+```rust
+fn main() {
+    let mut channel = Channel::new();
+    thread::scope(|s| {
+        let (sender, receiver) = channel.split();
+        s.spawn(move || {
+            sender.send("hello world!");
+        });
+        assert_eq!(receiver.receive(), "hello world!");
+    });
+}
+```
+
+显然，这个 Channel 比上一个 Channel 更方便使用，至少在这个简单的测试程序中是这样。我们不得不牺牲一些灵活性来创造这种便利性：只有调用 `split()` 的线程才能调用 `receive()`。如果你交换 send 和 receive 行，此程序将不再编译。根据用例，这可能完全没问题、有用或非常不方便。
+
+确实，有许多方法解决这个问题，其中有很多胡增加一些额外的复杂度并影响一些性能。总的来说，我们可以继续探索的变种和权衡是无穷无尽的。
+
+我们很容易花费大量的时间实现 20 个一次性 channel 不同的变体，每个变体都具有不同的属性，适用于每个可以想象到的用例甚至更多。尽管这听起来很有趣，但是我们应该避免陷入这个歧途，并在事情失控之前结束本章。
 
 ## 总结
 
