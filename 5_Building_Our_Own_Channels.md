@@ -293,14 +293,14 @@ const WRITING: u8 = 1;
 const READY: u8 = 2;
 const READING: u8 = 3;
 
-pub struct Channel<T> {
-    message: UnsafeCell<MaybeUninit<T>>,
+pub struct Channel&lt;T&gt; {
+    message: UnsafeCell&lt;MaybeUninit&lt;T&gt;&gt;,
     state: AtomicU8,
 }
 
-unsafe impl<T: Send> Sync for Channel<T> {}
+unsafe impl&lt;T: Send&gt; Sync for Channel&lt;T&gt; {}
 
-impl<T> Channel<T> {
+impl&lt;T&gt; Channel&lt;T&gt; {
     pub const fn new() -> Self {
         Self {
             message: UnsafeCell::new(MaybeUninit::uninit()),
@@ -332,7 +332,7 @@ impl<T> Channel<T> {
     }
 }
 
-impl<T> Drop for Channel<T> {
+impl&lt;T&gt; Drop for Channel&lt;T&gt; {
     fn drop(&mut self) {
         if *self.state.get_mut() == READY {
             unsafe { self.message.get_mut().assume_init_drop() }
