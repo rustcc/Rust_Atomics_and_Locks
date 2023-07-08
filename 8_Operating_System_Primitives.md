@@ -169,7 +169,7 @@ Winodows 中的 `CRITICAL_SECTION` 实际上是一个递归互斥锁，只是它
 
 CRITICAL_SECTION 使用 `InitializeCriticalSection()` 函数来初始化，使用 `DeleteCriticalSection()` 函数来销毁，并且不能被移动。通过 `EnterCriticalSection()` 或者 `TryEnterCriticalSection()` 来锁定，并且使用 `LeaveCriticalSection()` 解锁。
 
-> 在 Rust 1.51 之前，Windows XP 上的 `std::sync::Mutex` 基于（Box 分配）CRITICAL_SECTION 对象。（Rust 1.51 放弃了对 Windows XP 的支持。）
+> 在 Rust 1.51 之前，Windows XP 上的 `std::sync::Mutex` 基于（Box 内存分配）CRITICAL_SECTION 对象。（Rust 1.51 放弃了对 Windows XP 的支持。）
 
 #### 精简的读写（SRW）锁[^5]
 
