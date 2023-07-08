@@ -100,7 +100,7 @@ pub struct Mutex {
 
 > 这就是 `std::sync::Mutex` 在 Rust 1.62 之前在所有 Unix 平台上实现的方式。
 
-这个方式的缺点就是开销大：每个 mutex 都有自己分配的内存，为创建、销毁以及使用 mutex 增加了显著的开销。另一个缺点是它阻止了 new 函数编译时执行（`const`），这妨碍了拥有静态 mutex 的方式。
+这个方式的缺点就是开销大：每个 mutex 都有自己分配的内存，为创建、销毁以及使用 mutex **增加**了显著的开销。另一个缺点是它阻止了 new 函数编译时执行（`const`），这妨碍了拥有静态 mutex 的方式。
 
 即使 `pthread_mutex_t` 是可移动的，`const fn new` 也可能仅使用默认设置来初始化，这导致了当递归锁定时的未定义行为。没有办法设计一个安全的接口来防止递归锁定，因此这意味着我们要使用 unsafe 标记锁定函数，以使用户承诺他们不会这样做。
 
@@ -123,9 +123,9 @@ fn main() {
 
 ## Linux
 
-在 Linux 系统中，pthread 同步原语所有都是使用 *futex 系统调用*实现。它的名称来自“快速用户互斥[^6]”（fast user-space mutex），因为增加这个系统调用最初的动机就是允许库（如 pthread 实现）包含一个快速且高效 mutex 实现。它的灵活远不止于此，可以用来构建许多不同的同步工具。
+在 Linux 系统中，pthread 同步原语所有都是使用 *futex 系统调用*实现。它的名称来自“快速用户互斥[^6]”（fast user-space mutex），因为**增加**这个系统调用最初的动机就是允许库（如 pthread 实现）包含一个快速且高效 mutex 实现。它的灵活远不止于此，可以用来构建许多不同的同步工具。
 
-在 2003 年，futex 系统调用被增加到 Linux 内核，此后进行了几次改善和扩展。一些其他的系统调用因此也增加了相似的功能，更值得注意的是，在 2012 年 Windows 8 也增加了 WaitOnAddress（我们将会稍后在[“Windows”](#windows)部分讨论这个）。在 2020 年，C++ 语言甚至把基础的类 futex 操作增加到了标准库，并添加了 `atomic_wait` 和 `atomic_notify` 函数。
+在 2003 年，futex 系统调用被增加到 Linux 内核，此后进行了几次改善和扩展。一些其他的系统调用因此也**增加**了相似的功能，更值得注意的是，在 2012 年 Windows 8 也**增加**了 WaitOnAddress（我们将会稍后在[“Windows”](#windows)部分讨论这个）。在 2020 年，C++ 语言甚至把基础的类 futex 操作**增加**到了标准库，并添加了 `atomic_wait` 和 `atomic_notify` 函数。
 
 ### Futex
 
@@ -384,7 +384,7 @@ SRWLOCK 类型仅是一个指针大小，可以用 `SRWLOCK_INIT` 静态初始�
 
 它通过 `AcquireSRWLockExclusive()`、`TryAcquireSRWLockExclusive()` 和 `ReleaseSRWLockExclusive()` 提供了独占（writer）锁定和解锁，并通过 `AcquireSRWLockShared()`、`TryAcquireSRWLockShared()` 和 `ReleaseSRWLockShared()` 提供了共享（reader）锁定和解锁。通常可以将其用作普通的互斥锁，只需忽略共享（reader）锁定函数即可。
 
-SRW 锁既不优先考虑 writer 也不优先考虑 reader。虽然不能保证，但是它试图去按顺序去服务所有锁请求，以减少性能下降。在已经持有一个共享（reader）锁定的线程上不要尝试获取第二个共享（reader）锁定。如果该操作在另一个线程的独占（writer）锁定操作之后排队，那么这样做可能会导致永久死锁，因为第一个线程已经持有的第一个共享（reader）锁定会阻塞第二个线程。
+SRW 锁既不优先考虑 writer 也不优先考虑 reader。虽然不能保证，但是它试图去按顺序去服务所有锁请求，以**减少**性能下降。在已经持有一个共享（reader）锁定的线程上不要尝试获取第二个共享（reader）锁定。如果该操作在另一个线程的独占（writer）锁定操作之后排队，那么这样做可能会导致永久死锁，因为第一个线程已经持有的第一个共享（reader）锁定会阻塞第二个线程。
 
 SRW 锁与条件变量一起引入了 Windows API。`CONDITION_VARIABLE` 仅占用一个指针的大小，可以使用 `CONDITION_VARIABLE_INIT` 进行静态初始化，不需要销毁。只要它没有被使用（被借用），我们也可以移动它。
 
