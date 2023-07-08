@@ -58,7 +58,7 @@ Windows 不遵循 POSIX 标准。它并没有携带一个拓展的 libc 作为�
 
   通过 `pthread_cond_timedwait()` 等待此类条件变量，可选择设置时间限制。通过调用 `pthread_cond_signal()` 唤醒等待的线程，或者为了一次唤醒所有等待的线程，调用 `pthread_cond_broadcast()`。
 
-Pthread 提供的其余同步原语是屏障（`pthread_barrier_t`）、自旋锁（`pthread_spinlock_t`）和一次性初始化（`pthread_once_t`），我们不会讨论。
+  Pthread 提供的其余同步原语是屏障（`pthread_barrier_t`）、自旋锁（`pthread_spinlock_t`）和一次性初始化（`pthread_once_t`），我们不会讨论。
 
 ### 在 Rust 中包裹
 
@@ -123,11 +123,216 @@ fn main() {
 
 ## Linux
 
+在 Linux 系统中，pthread 同步原语所有都是使用 *futex 系统调用*实现。它的名称来自“快速用户互斥[^6]”（fast user-space mutex），因为增加这个系统调用最初的动机就是允许库（如 pthread 实现）包含一个快速且高效 mutex 实现。它的灵活远不止于此，可以用来构建许多不同的同步工具。
+
+在 2003 年，futex 系统调用被增加到 Linux 内核，此后进行了几次改善和扩展。一些其他的系统调用因此也增加了相似的功能，更值得注意的是，在 2012 年 Windows 8 也增加了 WaitOnAddress（我们将会稍后在[“Windows”](#windows)部分讨论这个）。在 2020 年，C++ 语言甚至把基础的类 futex 操作增加到了标准库，并添加了 `atomic_wait` 和 `atomic_notify` 函数。
+
 ### Futex
+
+在 Linux 上，`SYS_futex` 是一个系统调用，在 32 位的原子整数上它实现了各种操作。主要的两个操作是 `FUTEX_WAIT` 和 `FUTEX_WAKE`。等待操作会让线程进入睡眠状态，而在同一个原子变量上进行唤醒操作则会将线程唤醒。
+
+这些操作并不会在原子整数中存储任何内容。相反，内核会记住哪些线程正在等待哪个内存地址，以便唤醒操作能够正确地唤醒线程。
+
+在[第一章的“等待：阻塞和条件变量”](./1_Basic_of_Rust_Concurrency.md#等待-阻塞park和条件变量)中，我们看到其他阻塞和唤醒线程的机制,需要一种方式以确保唤醒操作不会在竞争中丢失。对于线程的阻塞操作，通过将 `unpark()` 操作应用于未来的 `park()` 操作，来解决这个问题。并且对于条件变量来说，这是通过与条件变量一起使用的互斥锁来解决的。
+
+对于 futex 的等待和唤醒操作，使用了另一种机制。等待操作接受一个参数，该参数是我们期望原子变量具有的值，如果不匹配，就会拒绝阻塞。等待操作在与唤醒操作的原子性上保持一致，这意味着在检查期望值和实际进入睡眠状态之间，不会丢失任何唤醒信号。
+
+如果我们确保在唤醒操作之前改变原子变量的值，我们就可以确保即将开始等待的线程不会进入睡眠状态，这样就不再关心可能丢失 futex 唤醒操作的问题了。
+
+让我们通过一个简单的例子来实践一下。
+
+首先，我们需要能够调用这些系统调用。我们可以使用 libc crate 中的 syscall 函数来实现，并将每个调用封装在一个方便的 Rust 函数中，如下所示：
+
+```rust
+#[cfg(not(target_os = "linux"))]
+compile_error!("Linux only. Sorry!");
+
+pub fn wait(a: &AtomicU32, expected: u32) {
+    // Refer to the futex (2) man page for the syscall signature.
+    unsafe {
+        libc::syscall(
+            libc::SYS_futex, // The futex syscall.
+            a as *const AtomicU32, // The atomic to operate on.
+            libc::FUTEX_WAIT, // The futex operation.
+            expected, // The expected value.
+            std::ptr::null::<libc::timespec>(), // No timeout.
+        );
+    }
+}
+
+pub fn wake_one(a: &AtomicU32) {
+    // Refer to the futex (2) man page for the syscall signature.
+    unsafe {
+        libc::syscall(
+            libc::SYS_futex, // The futex syscall.
+            a as *const AtomicU32, // The atomic to operate on.
+            libc::FUTEX_WAKE, // The futex operation.
+            1, // The number of threads to wake up.
+        );
+    }
+}
+```
+
+现在，作为一个使用示例，让我们用这些让一个线程等待另一个线程。我们将使用一个原子变量，我们用 0 为它初始化，主线程将在该变量上进行 futex 等待。第二个线程会将变量更改为 1，然后在上面运行 futex 唤醒操作以唤醒主线程。
+
+就像线程阻塞和等待一个条件变量，futex 等待操作可能甚至在没有任何发生的情况下虚假唤醒。因此，通常在循环中使用它，如果我们等待的条件尚未满足，就会重复它。
+
+让我们来看一下下面的示例：
+
+```rust
+fn main() {
+    let a = AtomicU32::new(0);
+
+    thread::scope(|s| {
+        s.spawn(|| {
+            thread::sleep(Duration::from_secs(3));
+            a.store(1, Relaxed); // 1
+            wake_one(&a); // 2
+        });
+
+        println!("Waiting...");
+        while a.load(Relaxed) == 0 { // 3
+            wait(&a, 0); // 4
+        }
+        println!("Done!");
+    });
+}
+```
+
+1. 在几秒钟后，创建的线程将设置原子变量的值为 1。
+2. 然后，它执行一个 futex 唤醒操作去唤醒主线程，以防止它正在睡眠，这样可以看到变量已经发生了变化。
+3. 主线程将会等待直到变量是 0，然后继续打印最终的消息。
+4. futex 的 `wait` 操作用于将线程置入睡眠状态。非常重要的是，在进入睡眠之前，此操作将检查变量是否仍然是 0，这是在步骤 3 和步骤 4 之间不能丢失来自产生线程的信号的原因。要么 1（并且因此 2）尚未发生，它将进入睡眠状态，要么 1（并且可能 2）已经发生，线程将立即继续执行。
+
+在这里一个重要的观察是，如果 a 已经在 while 循环之前设置为 1，那么就可以完全避免 wait 调用。以类似地方式，如果主线程还在原子变量中存储了它是否开始等待的信号（通过将其设置为除了 0 或 1 之外的值），如果主线程尚未开始等待，发送信号的线程可以跳过 futex 的 wait 操作。这就是基于 futex 的同步原语如此快速的原因：由于我们自己管理状态，除非我们真正的需要阻塞，否则我们不需要依赖内核。
+
+> 自 Rust 1.48 以来，在 Linux 上，标准库的线程阻塞（park）函数是这样实现的。它们每个线程使用一个原子变量，有三种可能的状态：0 表示空闲和初始状态、1 为“已释放但尚未阻塞”，-1 为“已阻塞但尚未释放”。
+
+在[第九章](./9_Building_Our_Own_Locks.md)，我们将使用这些操作实现互斥锁、条件变量以及读写锁。
 
 ### Futex 操作
 
+接下来到等待和唤醒操作，futex 系统调用还支持其他几个操作。在该章节，我们将简要地讨论此系统调用的每个支持的操作。
+
+futex 的第一个参数始终是指向要操作的 32 位原子变量的指针。第二个参数是一个表示操作的常量，例如 `FUTEX_WAIT``，还可以添加最多两个标识：FUTEX_PRIVATE_FLAG` 和/或 `FUTEX_CLOCK_REALTIME`，我们将在下面进行讨论。剩余的参数取决于具体的操作，我们将在每个操作的描述中进行说明。
+
+* *FUTEX_WAIT*
+
+  该操作采用 2 个额外的参数：期待原子变量具有的值和指向表示最长时间等待的 timespec 的指针。
+
+  如果原子变量的值匹配预期的值，wait 操作将会阻塞，直到被其中一个唤醒操作唤醒，或者直到传递的 timespec 持续时间过去。如果 timespec 的指针为 null，则没有时间限制。此外，wait 操作可能会在达到时间限制之前出现虚假唤醒，并返回没有相应的唤醒操作。
+
+  与其他 `futex` 操作相比，检查和阻塞操作是单个原子操作，这意味着它们之间不会丢失唤醒信号。
+
+  timespec 指定的持续时间默认代表单调时钟（如 Rust 的 Instant）上的持续时间。通过添加 `FUTEX_CLOCK_REALTIME` 标识，将使用实时时钟（如 Rust 的 SystemTime）。
+
+  返回值指示是否匹配预期值以及是否达到了超时。
+
+* *FUTEX_WAKE*
+
+  此操作需要 1 个额外的参数：要唤醒的线程数，使用 i32 类型。
+
+  这会唤醒指定数量的，在相同原子变量上的等待操作中被阻塞的线程。（如果没有很多等待的线程，则唤醒较少的线程）更常见的是，这个参数要么只唤醒一个线程，要么是设置为 `i32::MAX` 唤醒所有线程。
+
+  返回值是唤醒的线程数。
+
+* *FUTEX_WAIT_BITSET*
+
+  这个操作采用了 4 个额外的参数：期待原子变量具有的值、指向表示最长时间等待的 timespec 指针、一个忽略的指针以及一个 32 位“bitset”（u32）。
+
+  该操作行为与 FUTEX_WAIT 相同，但是有两点区别。
+
+  第一个区别是它采用一个 bitset 参数，可以仅用于等待特定的唤醒操作，而不是在相同的原子变量上的所有唤醒操作等待。`FUTEX_WAKE` 操作从不会被忽略，但是如果等待的“bitset”和唤醒的“bitset”没有一位是相等的，则忽略来自 `FUTEX_WAKE_BITSET` 操作的信号。
+
+  例如，`FUTEX_WAKE_BITSET` 操作的“bitset”是 `0b0101`，它能唤醒位集为 `0b1100` 的 `FUTEX_WAIT_BITSET` 操作，但是不能唤醒的位集为 `0b0010`。
+
+  这在实现类似读写锁的时候很有用，可以唤醒 writer，而不唤醒任何 reader。然而，请注意，对于处理两种不同类型的 writer，使用两个单独的原子变量可能比使用一个更高效，因为内核将针对每个原子变量维护一个 waiter 列表。
+
+  `FUTEX_WAIT_BITSET` 与 `FUTEX_WAIT` 的另一个区别是，它使用 `timespec` 作为绝对时间戳，而不是持续时间。因此，通常会将 `FUTEX_WAIT_BITSET` 与 `u32::MAX`（所有位都为 1）的“bitset”一起使用，从而将其转变为常规的 FUTEX_WAIT 操作，但设置了绝对时间戳作为等待的时间限制。
+
+* *FUTEX_WAKE_BITSET*
+
+  此操作采用了 4 个额外的参数：要唤醒的线程数量、2 个忽略的指针以及 32 位“bitset”（u32）。
+
+  此操作与 FUTEX_WAKE 操作相同，只是它不会唤醒那些“bitset”没有重复的 FUTEX_WAIT_BITSET 操作。（见上面的 FUTEX_WAIT_BITSET。）
+
+  当 bitset 设置为 `u32::MAX`（所有位都为 1）时，这与 FUTEX_WAKE 操作相同。
+
+* *FUTEX_REQUEUE*
+
+  此操作采用 3 个额外的参数：要唤醒的线程数（i32）、要重新排队的线程数（i32）和一个次要原子变量的地址。
+
+  该操作唤醒一个给定数量的等待线程，并且将剩余的等待线程重新排队，一等待另一个原子变量。
+
+  重新排队的等待线程继续等待，但不再受到主原子变量的唤醒操作的影响。相反，它们现在通过在次要原子变量上唤醒操作来唤醒。
+
+  这对于实现类似条件变量的“notify_all”操作是有用的。与其唤醒所有线程，不如随后尝试锁定 mutex，否则很可能导致除了一个线程外的其他线程都在随后立即等待该 mutex，我们可以仅唤醒一个线程，并将其所有其他的线程重新排队，直接让它们等待 mutex 而不先唤醒它们。
+
+  与 FUTEX_WAKE 操作类似，可以使用 `i32::MAX` 的值来重新排队所有等待的线程。（指定唤醒线程数为 `i32::MAX` 的值并不是非常有用，因为这将使该操作等效于 `FUTEX_WAKE`。）
+
+  返回值是唤醒线程的数量。
+
+* *FUTEX_CMP_REQUEUE*
+
+  此操作采用额外的 4 个参数：要唤醒的线程数（i32）、要重新排队的线程数（i32）、次要原子变量的地址以及主要原子变量预期的值。
+
+  这个操作与 `FUTEX_REQUEUE` 几乎相同，但如果主要原子变量的值不匹配预期值，它会拒绝执行。对值的检查和重新排队操作在与其他 futex 操作相比是原子的。
+
+  与 FUTEX_REQUEUE 不同，它返回被唤醒和重新排队的线程数量之和。
+
+* *FUTEX_WAKE_OP*
+
+  此操作采用 4 个额外的参数：在主要原子变量上要唤醒的线程数（i32）、在次要原子变量上可能要唤醒的线程数（i32）、次要原子变量的地址以及一个 32 位的值，其用于编码要执行的操作和要进行比较的条件。
+
+  这是一个非常专业的用于修改次要原子变量的操作，唤醒许多等待著原子变量的线程，检查原子变量的前一个值是否与给定值匹配，如果匹配，则还会唤醒次要原子变量上的一些线程。
+
+  换句话说，它与下面的代码等同，除了整个操作行为与其他 futex 操作相比是原子的：
+
+  ```rust
+  let old = atomic2.fetch_update(Relaxed, Relaxed, some_operation);
+
+  wake(atomic1, N);
+  if some_condition(old) {
+      wake(atomic2, M);
+  }
+  ```
+
+  通过系统调用的最后一个参数来指定要执行的修改操作以及要检查的条件，这是一个 32 位编码。操作可以以下之一：赋值、加法、二进制或、二进制与非、二进制异或，其中包含一个 12 位参数或者是一个 32 位的 2 的幂次方参数。比较操作可以选择 `==`、`!=`、`<`、`<=`、`>` 和 `>=`，并带有一个 12 位参数。
+
+  有关该参数的编码详细信息，请参阅 futex(2) 手册页，或使用 `crates.io` 上的 linux-futex crate，该 crate 提供了一种方便的构造参数的方法。
+
+  返回值是唤醒线程的总数。
+
+  乍看之下，这似乎是一个具有许多用途的灵活操作。然而，它最初设计用于 GNU libc 中的一个特定用例，其中需要从两个单独的原子变量中唤醒两个线程。这个特定的用例已经被不同的实现替代，不再利用 FUTEX_WAKE_OP。
+
+可以添加 FUTEX_PRIVATE_FLAG 到其中的任何一个操作，以启用可能的优化。（通常情况下，如果对同一原子变量的所有相关 futex 操作来自同一进程，则可以利用此标志）。为了使用该标志，每个相关的 futex 操作都必须包括相同的标志。通过允许内核假设不会与其他进程发生交互，它可以跳过执行 futex 操作中的一些可能高开销的步骤，从而提高性能。
+
+除了 Linux，NetBSD 也支持上述所有的 futex 操作。OpenBSD 也有一个 futex 系统调用，但仅支持 FUTEX_WAIT、FUTEX_WAKE 和 FUTEX_REQUEUE 操作。FreeBSD 没有原生的 futex 系统调用，但包含一个名为 `_umtx_op` 的系统调用，其中包含与 FUTEX_WAIT 和 FUTEX_WAKE 几乎相同的功能：`UMTX_OP_WAIT`（用于 64 位原子变量）、UMTX_OP_WAIT_UINT（用于 32 位原子变量）和 UMTX_OP_WAKE。Windows 也包含与 futex 等待和唤醒操作非常相似的函数，我们将在本章后面讨论。
+
+<div class="box">
+  <h2 style="text-align: center;">新的 Futex 操作</h2>
+  <p>发布在 2022 年的 Linux 5.16，引入了一个新的系统调用：<code>futex_waitv</code>。这个新的系统调用通过向它提供一个包含待等待的原子变量（及其期望值）的列表，允许一次等待多个 futex。在 <code>futex_waitv</code> 上被阻塞的线程可以通过在任意指定的变量上进行唤醒操作来被唤醒。</p>
+
+  <p>这个新的系统调用还为未来的扩展留出了空间。例如，可以指定待等待的原子变量的大小。虽然最初的实现只支持 32 位原子变量，就像原始的 futex 系统调用一样，但在未来可能会扩展为支持 8 位、16 位和 64 位原子变量。</p>
+</div>
+
 ### 优先继承 Futex 操作
+
+优先级反转[^7]是指高优先级线程在低优先级线程持有的锁上被阻塞的问题。高优先级线程实际上“反转”了它的优先级，因为它现在必须等待低优先级线程释放锁才能继续执行。
+
+解决这个问题的方法是优先级继承，即阻塞的线程继承等待它的最高优先级线程的优先级，在持有锁期间临时提高低优先级线程的优先级。
+
+除了我们之前讨论过的七个 futex 操作外，还有六个专门用于实现优先级继承锁的优先级继承 futex 操作。
+
+我们之前讨论过的通用 futex 操作对于原子变量的具体内容没有任何要求。我们可以自己选择 32 位的表示方式。然而，对于优先级继承 mutex，内核需要能够理解 mutex 是否被锁定，如果锁定了，则需要知道哪个线程锁定了它。
+
+为了避免在每个状态变化上进行系统调用，优先级继承 futex 操作指定了 32 位原子变量的确切内容，以便内核可以理解它：最高位表示是否有任何线程正在等待锁定 mutex，最低的 30 位包含持有锁的线程 ID（Linux 的 tid，而不是 Rust 的 ThreadId），当解锁时为零。
+
+作为额外的功能，如果持有锁的线程在未解锁的情况下终止，内核将设置次高位，但前提是没有任何 waiter。这使得 mutex具有*鲁棒性*：这是一个术语，用于描述 mutex 在“拥有”线程意外终止的情况下能够正常处理的能力。
+
+优先级继承 futex 操作与标准 mutex 操作一一对应：FUTEX_LOCK_PI 用于锁定，FUTEX_UNLOCK_PI 用于解锁，FUTEX_TRYLOCK_PI 用于非阻塞锁定。此外，FUTEX_CMP_REQUEUE_PI 和 FUTEX_WAIT_REQUEUE_PI 操作可用于实现与优先级继承互斥锁配对的条件变量。
+
+我们将不详细讨论这些操作。有关详细信息，请参阅 futex(2) Linux 手册页或 `crates.io` 上的 linux-futex crate。
 
 ## macOS
 
@@ -224,5 +429,7 @@ Windows API 的一些（但不是全部）同步原语是使用这些函数实�
 [^3]: 挂钟时间，即现实世界里我们感知到的时间，如 2008-08-08 20:08:00。但对计算机而言，这个时间不一定是单调递增的。因为人觉得当前机器的时间不准，可以随意拨慢或调快。
 [^4]: <https://zh.wikipedia.org/zh-cn/臨界區段>
 [^5]: <https://learn.microsoft.com/zh-cn/windows/win32/sync/slim-reader-writer--srw--locks>
+[^6]: <https://zh.wikipedia.org/wiki/Futex>
+[^7]: <https://zh.wikipedia.org/zh-cn/优先转置>
 
 参考：<https://dashen.tech/2012/07/17/Wall-Clock与Monotonic-Clock/>
