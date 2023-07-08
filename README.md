@@ -111,7 +111,7 @@
 * [Windows](./8_Operating_System_Primitives.md#windows)
   * [重量级内核对象](./8_Operating_System_Primitives.md#重量级内核对象)
   * [轻量级对象](./8_Operating_System_Primitives.md#轻量级对象)
-    * [一个轻巧的读写锁](./8_Operating_System_Primitives.md#一个轻巧的读写锁)
+    * [精简的读写锁（SRW）](./8_Operating_System_Primitives.md#精简的读写srw锁5)
   * [基于地址的等待](./8_Operating_System_Primitives.md#基于地址的等待)
 * [总结](./8_Operating_System_Primitives.md#总结)
 
