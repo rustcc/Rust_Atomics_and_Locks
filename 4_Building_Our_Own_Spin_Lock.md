@@ -89,7 +89,7 @@ unsafe impl<T> Sync for SpinLock<T> where T: Send {}
 
 注意，我们并不需要去要求 T 是 `Sync`，由于我们的 `SpinLock<T>` 仅一次允许一个线程访问它保护的 T。只有当我们同时允许多个线程访问权限时，就像读写锁对 reader 所做的那样，我们（另外）才需要 `T: Sync`。
 
-下一步，现在我们的新函数需要采用一个 T 类型的值来初始化 `UnsafeCell`：
+下一步，现在我们的新函数需要接收一个 T 类型的值来初始化 `UnsafeCell`：
 
 ```rust
 impl<T> SpinLock<T> {
@@ -149,9 +149,9 @@ pub unsafe fn unlock(&self) {
 
 ## 使用锁守卫的安全接口
 
-为了能够提供一个完全安全地接口，我们需要将解锁操作绑定到 `&mut T` 的末尾。我们可以通过将此引用包装成我们自己的类型来做到这一点，该类型的行为类似于引用，但也实现了 Drop trait，以便在它被 drop 时做一些事情。
+为了能够提供一个完全安全地接口，我们需要将解锁操作绑定到 `&mut T` 的末尾。我们可以通过将此引用包装成我们自己的类型来做到这一点，该类型的行为类似于引用，但也实现了 Drop trait，以便在它被丢弃时做一些事情。
 
-这一类型通常被称为 *guard*，因为它有效地守卫了锁的状态，并且对该状态负责，直到它被 drop。
+这一类型通常被称为 *guard*，因为它有效地守卫了锁的状态，并且对该状态负责，直到它被丢弃。
 
 我们的 `Guard` 类型将仅包含对 SpinLock 的引用，以便它既可以访问 UnsafeCell，也可以稍后重置 AtomicBool：
 
@@ -257,7 +257,7 @@ fn main() {
 
 上面的程序展示了我们的 `SpinLock` 是多么容易使用。多亏了 `Deref` 和 `DerefMut`，我们可以直接在 guard 上调用 `Vec::push` 方法。多亏了 `Drop`，我们不必担心解锁。
 
-通过调用 `drop(g)` 来 drop guard，也可以明确地解锁。如果你尝试过早地解锁，你将看见 guard 正在做它的工作时，发生编译器错误。例如，如果你在两个 `push(2)` 行之间插入 `drop(g);`，第二个 push 将无法编译，因为你此时已经 drop g 了：
+通过调用 `drop(g)` 来丢弃 guard，也可以明确地解锁。如果你尝试过早地解锁，你将看见 guard 正在做它的工作时，发生编译器错误。例如，如果你在两个 `push(2)` 行之间插入 `drop(g);`，第二个 push 将无法编译，因为你此时已经丢弃 g 了：
 
 ```txt
 error[E0382]: borrow of moved value: `g`
@@ -281,7 +281,7 @@ error[E0382]: borrow of moved value: `g`
 * *Acquire* 和 *Release* 内存排序对这个用例是极合适的。
 * 当做出必要的未检查的假设以避免未定义的行为时，可以通过将函数标记为不安全来将责任转移到调用者。
 * `Deref` 和 `DerefMut` trait 可用于使类型像引用一样，透明地提供对另一个对象的访问。
-* `Drop` trait 可以用于在对象被 drop 时，做一些事情，例如当它超出作用域或者它被传递给 `drop()`。
+* `Drop` trait 可以用于在对象被丢弃时，做一些事情，例如当它超出作用域或者它被传递给 `drop()`。
 * *锁 guard* 是一种特殊类型的有用设计模式，它被用于表示对锁定的锁的（安全）访问。由于 `Deref` trait，这种类型通常与引用的行为相似，并通过 `Drop` trait 实现自动解锁。
 
 <p style="text-align: center; padding-block-start: 5rem;">
