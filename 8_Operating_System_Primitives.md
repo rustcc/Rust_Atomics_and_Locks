@@ -131,17 +131,75 @@ fn main() {
 
 ## macOS
 
+macOS 部分的内核支持各种有用的低级并发相关的系统调用。然而，就像大多数操作系统一样，内核接口并不是稳定的，并且我们应该直接地使用它。
+
+软件与 macOS 内核交互的唯一方式是通过系统携带的库。这些库包含它对 C（libc）、C++（libc++）、Objective-C 和 Swift 的标准库实现。
+
+作为符合 POSIX 标准的 Unix 系统，macOS C 标准库包含一个完整的 pthread 实现。其他语言中的标准库锁通常在底层使用 pthread 原语。
+
+在 macOS 上，与其他系统对比，Pthread 的锁相对低较慢。原因之一是 macOS 上的锁默认情况下是*公平锁*（Fair Lock），这意味着几个线程试图去锁定相同的 mutex 时，它们会按照到达的顺序一次获得锁定，就像一个完美的队列。尽管公平性可能是值得拥有的属性，但它会显著降低性能，特别是在高竞争的情况下。
+
 ### os_unfair_lock
+
+除了 pthread 原语，macOS 10.12 引入了一种新的轻量级平台特定的互斥锁，它是不公平的：`os_unfair_lock`。它的大小仅有 32 位，可以使用 OS_UNFAIR_LOCK_INIT 常来那个静态地初始化，并且不需要销毁。它可以通过 `os_unfair_lock_lock()`（阻塞）或 `os_unfair_lock_trylock()`（非阻塞）来锁定它，并且通过 `os_unfair_lock_unlock()` 来解锁。
+
+不幸的是，它没有条件变量，也没有 reader-writer 变体。
 
 ## Windows
 
+Windows 操作系统携带了一系列库，它们一起形成了 *Windows API*，通常称之为“Win32 API”（甚至在 64 位系统也是）。它构成了一个在“Native 之上”的层：大部分是与内核没有交互的接口，我们不建议直接使用它。
+
+通过微软官方提供的 windows 和 windows-sys crate，Windows API 可以为 Rust 程序所用，这在 `crates.io` 上是可获得的。
+
 ### 重量级内核对象
+
+在 Windows 上可用的许多旧的同步原语完全由内核管理，这使得它们非常重量，并赋予它们与其他内核管理对象（例如文件）类似的属性。它们可以被多个进程使用，可以通过名称进行命名和定位，并且支持细粒度的权限，类似于文件。例如，可以允许一个进程等待某个对象，而不允许它通过该对象发送信号来唤醒其他进程。
+
+这些重量级的内核管理同步对象包括 Mutex（可以锁定和解锁）、Event（可以发送信号和等待）以及 WaitableTimer（可以在选择的时间后或定期自动发送信号）。创建这样的对象会得到一个句柄（HANDLE），就像打开一个文件一样，可以轻松地传递并与常规的 HANDLE 函数一起使用，特别是一系列的等待函数。这些函数允许我们等待各种类型的一个或多个对象，包括重量级同步原语、进程、线程和各种形式的 I/O。
 
 ### 轻量级对象
 
-#### 一个轻巧的读写锁
+在 Windows API 中，一个轻量级的同步原语包括是“临界区[^4]”（critical section）。
+
+*临界区*这个术语指的是程序的一部分，即代码的“区段”，可能不允许超过一个线程进入。这种保护临界区段机制通常称之为互斥锁。然而，微软为这种机制使用“临界区”的名称，可能因为之前讨论的重量级 mutex 对象已经采用了“互斥锁”这个名称。
+
+Winodows 中的 `CRITICAL_SECTION` 实际上是一个递归互斥锁，只是它使用了“enter”（进入）和“leave”（离开）而不是“lock”（锁定）和“unlock”（解锁）。作为递归互斥锁，它仅被设计用于保护其他的线程。它允许相同的线程多次锁定（或者“进入”）它，也要求该线程也必须相同的次数解锁（“离开”）。
+
+当使用 Rust 包装该类型时，有些东西值得注意。成功地锁定（进入）`CRITICAL_SECTION` 不应该导致对其数据保护的独占引用（`&mut T`）。否则，线程可以使用此来创建对同一数据的两个独占引用，这会立即导致未定义行为。
+
+CRITICAL_SECTION 使用 `InitializeCriticalSection()` 函数来初始化，使用 `DeleteCriticalSection()` 函数来销毁，并且不能被移动。通过 `EnterCriticalSection()` 或者 `TryEnterCriticalSection()` 来锁定，并且使用 `LeaveCriticalSection()` 解锁。
+
+> 在 Rust 1.51 之前，Windows XP 上的 `std::sync::Mutex` 基于（Box 分配）CRITICAL_SECTION 对象。（Rust 1.51 放弃了对 Windows XP 的支持。）
+
+#### 精简的读写（SRW）锁[^5]
+
+从 Windows Vista（和 Windows Server 2008）开始，Windows API 包含了一个非常轻量级的优秀锁原语：*精简读写锁*，简称 *SRW 锁*。
+
+SRWLOCK 类型仅是一个指针大小，可以用 `SRWLOCK_INIT` 静态初始化，并且不需要销毁。当不再被使用（借用），我们甚至允许移动它，使它成为 Rust 类型的理想选择。
+
+它通过 `AcquireSRWLockExclusive()`、`TryAcquireSRWLockExclusive()` 和 `ReleaseSRWLockExclusive()` 提供了独占（writer）锁定和解锁，并通过 `AcquireSRWLockShared()`、`TryAcquireSRWLockShared()` 和 `ReleaseSRWLockShared()` 提供了共享（reader）锁定和解锁。通常可以将其用作普通的互斥锁，只需忽略共享（reader）锁定函数即可。
+
+SRW 锁既不优先考虑 writer 也不优先考虑 reader。虽然不能保证，但是它试图去按顺序去服务所有锁请求，以减少性能下降。在已经持有一个共享（reader）锁定的线程上不要尝试获取第二个共享（reader）锁定。如果该操作在另一个线程的独占（writer）锁定操作之后排队，那么这样做可能会导致永久死锁，因为第一个线程已经持有的第一个共享（reader）锁定会阻塞第二个线程。
+
+SRW 锁与条件变量一起引入了 Windows API。`CONDITION_VARIABLE` 仅占用一个指针的大小，可以使用 `CONDITION_VARIABLE_INIT` 进行静态初始化，不需要销毁。只要它没有被使用（被借用），我们也可以移动它。
+
+条件变量不仅通过 SleepConditionVariableSRW 与 SRW 锁一起使用，还可以通过 SleepConditionVariableCS 与临界区一起使用。
+
+唤醒等待线程要么通过 WakeConditionVariable 唤醒单个线程，要么通过 WakeAllConditionVariable 唤醒所有等待线程。
+
+> 最初，标准库中使用的 Windows SRW 锁和条件变量被包装在 Box 中，以避免移动对象。直到我们在 2020 年要求之后，微软才记录了这些对象的可移动性保证。自 Rust 1.49 起，`std::sync::Mutex`、`std::sync::RwLock` 和 `std::sync::Condvar` 在 Windows Vista 及更高版本中直接封装了 SRWLOCK 或 CONDITION_VARIABLE，而无需进行任何内存的分配。
 
 ### 基于地址的等待
+
+Windows 8（和 Windows Server 2012）引入了一种新的、更灵活的同步功能类型，非常类似于本章前面讨论的 Linux `FUTEX_WAIT` 和 `FUTEX_WAKE` 操作。
+
+`WaitOnAdderss` 函数可以操作 8 位、16 位、32 位 或 64 位的原子变量。它采用了 4 个参数：原子变量地址、保存期望值的变量地址、原子变量大小（以字节为单位）以及在放弃之前的最大等待最大毫秒数（或者无限超时的 `u32::MAX`）。
+
+就像 FUTEX_WAIT 操作一样，它将原子变量的值与预期值进行比较，如果匹配则进入睡眠状态，等待相应的唤醒操作。检查和睡眠操作相对于唤醒操作是原子发生的，这意味着没有唤醒信号会在两者之间丢失。
+
+唤醒正在等待 `WaitOnAddress` 的线程可以通过 `WakeByAddressSingle` 来唤醒单个线程，或者通过 `WakeByAddressAll` 来唤醒所有等待的线程。这两个函数只接受一个参数：原子变量的地址，该地址也被传递给 `WaitOnAddress`。
+
+Windows API 的一些（但不是全部）同步原语是使用这些函数实现的。更重要的是，它们是构建我们自己的原始物的绝佳基石，我们将在[第9章](./9_Building_Our_Own_Locks.md)中这样做。
 
 ## 总结
 
@@ -164,5 +222,7 @@ fn main() {
 [^1]: [可移植操作系统接口](https://zh.wikipedia.org/wiki/可移植操作系统接口)
 [^2]: 是个绝对时间。表示系统（或程序）启动后流逝的时间，更改系统的时间对它没有影响。每次系统（或程序）启动时，该值都归 0
 [^3]: 挂钟时间，即现实世界里我们感知到的时间，如 2008-08-08 20:08:00。但对计算机而言，这个时间不一定是单调递增的。因为人觉得当前机器的时间不准，可以随意拨慢或调快。
+[^4]: <https://zh.wikipedia.org/zh-cn/臨界區段>
+[^5]: <https://learn.microsoft.com/zh-cn/windows/win32/sync/slim-reader-writer--srw--locks>
 
 参考：<https://dashen.tech/2012/07/17/Wall-Clock与Monotonic-Clock/>
