@@ -101,7 +101,7 @@
 
 * [使用内核接口](./8_Operating_System_Primitives.md#使用内核接口)
 * [POSIX](./8_Operating_System_Primitives.md#posix)
-  * [在 Rust 中包裹](./8_Operating_System_Primitives.md#在-rust-中包裹)
+  * [在 Rust 中包装类型](./8_Operating_System_Primitives.md#在-rust-中包装类型)
 * [Linux](./8_Operating_System_Primitives.md#linux)
   * [Futex](./8_Operating_System_Primitives.md#futex)
   * [Futex 操作](./8_Operating_System_Primitives.md#futex-操作)
