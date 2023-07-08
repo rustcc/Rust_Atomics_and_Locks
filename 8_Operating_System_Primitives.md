@@ -330,7 +330,7 @@ futex 的第一个参数始终是指向要操作的 32 位原子变量的指针�
 
 作为额外的功能，如果持有锁的线程在未解锁的情况下终止，内核将设置次高位，但前提是没有任何 waiter。这使得 mutex具有*鲁棒性*：这是一个术语，用于描述 mutex 在“拥有”线程意外终止的情况下能够正常处理的能力。
 
-优先级继承 futex 操作与标准 mutex 操作一一对应：FUTEX_LOCK_PI 用于锁定，FUTEX_UNLOCK_PI 用于解锁，FUTEX_TRYLOCK_PI 用于非阻塞锁定。此外，FUTEX_CMP_REQUEUE_PI 和 FUTEX_WAIT_REQUEUE_PI 操作可用于实现与优先级继承互斥锁配对的条件变量。
+优先级继承 futex 操作与标准 mutex 操作一一对应：FUTEX_LOCK_PI 用于锁定，FUTEX_UNLOCK_PI 用于解锁，FUTEX_TRYLOCK_PI 用于非阻塞锁定。此外，FUTEX_CMP_REQUEUE_PI 和 FUTEX_WAIT_REQUEUE_PI 操作可用于实现与优先级继承 mutex 配对的条件变量。
 
 我们将不详细讨论这些操作。有关详细信息，请参阅 futex(2) Linux 手册页或 `crates.io` 上的 linux-futex crate。
 
