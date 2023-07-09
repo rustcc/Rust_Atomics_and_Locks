@@ -1,5 +1,7 @@
 # 第八章：操作系统原语
 
+（[英文版本](https://marabos.nl/atomics/os-primitives.html)）
+
 目前，我们主要聚焦在非阻塞的操作中。如果我们想要实现一些类似互斥锁或者条件变量的内容，也就是能够等待另一个线程去解锁或者通知它的内容，我们需要一种有效地阻塞当前线程的方式。
 
 正如我们在[第四章](./4_Building_Our_Own_Spin_Lock.md)所见到的，我们可以不依赖操作系统，通过自旋，重复地一遍又一遍地尝试某些操作，自己实现阻塞，但这浪费大量的处理器时间。如果我们想要高效地进行阻塞，我们需要操作系统内核的帮助。
@@ -9,6 +11,8 @@
 我们将需要一种方式来通知内核我们正在等待某个事件，并要求它将我们的线程置于睡眠状态，直到发生相关的事情。
 
 ## 使用内核接口
+
+（[英文版本](https://marabos.nl/atomics/os-primitives.html#interfacing-with-the-kernel)）
 
 与内核进行通信的方式很大程度依赖于操作系统，甚至是它的版本。通常，如何工作的细节被一个库或者更多库所隐藏，这些库为我们处理这些细节。例如，使用 Rust 的标准库，我们可以仅调用 `File::open()` 去打开这个文件，而不必关心任何操作系统内核的细节。类似地，使用 C 标准库（`libc`）也可以调用标准的 `fopen()` 函数去打开一个文件。调用这样的函数最终会导致调用操作系统内核，也称为*系统调用*（syscall），通常通过专门的处理器指令来完成（在某些架构上，该指令甚至直接称为 syscall）。
 
@@ -27,6 +31,8 @@ Windows 不遵循 POSIX 标准。它并没有携带一个拓展的 libc 作为�
 通过它们的库，操作系统为我们提供了需要与内核进行交互的同步原语，如互斥锁和条件变量。这些实现的哪一部分属于库/内核的一部分，在不同的操作系统中有很大的差异。例如，有时互斥锁的锁定和解锁操作直接对应一个内核系统调用，而在其他系统中，库会处理大部分操作，并且只在需要阻塞或唤醒线程时执行系统调用（后者往往更高效，因为进行系统调用可能较慢）。
 
 ## POSIX
+
+（[英文版本](https://marabos.nl/atomics/os-primitives.html#posix)）
 
 作为 POSIX 线程扩展的一部分，更为人熟知的是 pthread，POSIX 规范了用于并发的数据类型和函数。尽管 libthread 在技术上是作为一个独立的系统库的一部分，但是如今它通常被直接包含在 libc 中。
 
@@ -61,6 +67,8 @@ Windows 不遵循 POSIX 标准。它并没有携带一个拓展的 libc 作为�
   Pthread 提供的其余同步原语是屏障（`pthread_barrier_t`）、自旋锁（`pthread_spinlock_t`）和一次性初始化（`pthread_once_t`），我们不会讨论。
 
 ### 在 Rust 中包装类型
+
+（[英文版本](https://marabos.nl/atomics/os-primitives.html#wrapping-in-rust)）
 
 通过方便地将其 C 类型（通过 libc crate）包装在 Rust 结构体中，我们可以轻松地将这些 pthread 同步原语暴露给 Rust，例如：
 
@@ -123,11 +131,15 @@ fn main() {
 
 ## Linux
 
+[英文版本](https://marabos.nl/atomics/os-primitives.html#linux)
+
 在 Linux 系统中，pthread 同步原语所有都是使用 *futex 系统调用*实现。它的名称来自“快速用户互斥[^6]”（fast user-space mutex），因为**增加**这个系统调用最初的动机就是允许库（如 pthread 实现）包含一个快速且高效 mutex 实现。它的灵活远不止于此，可以用来构建许多不同的同步工具。
 
 在 2003 年，futex 系统调用被增加到 Linux 内核，此后进行了几次改善和扩展。一些其他的系统调用因此也**增加**了相似的功能，更值得注意的是，在 2012 年 Windows 8 也**增加**了 WaitOnAddress（我们将会稍后在[“Windows”](#windows)部分讨论这个）。在 2020 年，C++ 语言甚至把基础的类 futex 操作**增加**到了标准库，并添加了 `atomic_wait` 和 `atomic_notify` 函数。
 
 ### Futex
+
+[英文版本](https://marabos.nl/atomics/os-primitives.html#futex)
 
 在 Linux 上，`SYS_futex` 是一个系统调用，在 32 位的原子整数上它实现了各种操作。主要的两个操作是 `FUTEX_WAIT` 和 `FUTEX_WAKE`。等待操作会让线程进入睡眠状态，而在同一个原子变量上进行唤醒操作则会将线程唤醒。
 
@@ -211,6 +223,8 @@ fn main() {
 在[第九章](./9_Building_Our_Own_Locks.md)，我们将使用这些操作实现互斥锁、条件变量以及读写锁。
 
 ### Futex 操作
+
+[英文版本](https://marabos.nl/atomics/os-primitives.html#futex-ops)
 
 接下来到等待和唤醒操作，futex 系统调用还支持其他几个操作。在该章节，我们将简要地讨论此系统调用的每个支持的操作。
 
@@ -318,6 +332,8 @@ futex 的第一个参数始终是指向要操作的 32 位原子变量的指针�
 
 ### 优先继承 Futex 操作
 
+（[英文版本](https://marabos.nl/atomics/os-primitives.html#priority-inheritance-futex-operations)）
+
 优先级反转[^7]是指高优先级线程在低优先级线程持有的锁上被阻塞的问题。高优先级线程实际上“反转”了它的优先级，因为它现在必须等待低优先级线程释放锁才能继续执行。
 
 解决这个问题的方法是优先级继承，即阻塞的线程继承等待它的最高优先级线程的优先级，在持有锁期间临时提高低优先级线程的优先级。
@@ -336,6 +352,8 @@ futex 的第一个参数始终是指向要操作的 32 位原子变量的指针�
 
 ## macOS
 
+（[英文版本](https://marabos.nl/atomics/os-primitives.html#macos)）
+
 macOS 部分的内核支持各种有用的低级并发相关的系统调用。然而，就像大多数操作系统一样，内核接口并不是稳定的，并且我们应该直接地使用它。
 
 软件与 macOS 内核交互的唯一方式是通过系统携带的库。这些库包含它对 C（libc）、C++（libc++）、Objective-C 和 Swift 的标准库实现。
@@ -346,11 +364,15 @@ macOS 部分的内核支持各种有用的低级并发相关的系统调用。�
 
 ### os_unfair_lock
 
+（[英文版本](https://marabos.nl/atomics/os-primitives.html#os-unfair-lock)）
+
 除了 pthread 原语，macOS 10.12 引入了一种新的轻量级平台特定的互斥锁，它是不公平的：`os_unfair_lock`。它的大小仅有 32 位，可以使用 OS_UNFAIR_LOCK_INIT 常来那个静态地初始化，并且不需要销毁。它可以通过 `os_unfair_lock_lock()`（阻塞）或 `os_unfair_lock_trylock()`（非阻塞）来锁定它，并且通过 `os_unfair_lock_unlock()` 来解锁。
 
 不幸的是，它没有条件变量，也没有 reader-writer 变体。
 
 ## Windows
+
+（[英文版本](https://marabos.nl/atomics/os-primitives.html#windows)）
 
 Windows 操作系统携带了一系列库，它们一起形成了 *Windows API*，通常称之为“Win32 API”（甚至在 64 位系统也是）。它构成了一个在“Native 之上”的层：大部分是与内核没有交互的接口，我们不建议直接使用它。
 
@@ -358,11 +380,15 @@ Windows 操作系统携带了一系列库，它们一起形成了 *Windows API*�
 
 ### 重量级内核对象
 
+（[英文版本](https://marabos.nl/atomics/os-primitives.html#heavyweight-kernel-objects)）
+
 在 Windows 上可用的许多旧的同步原语完全由内核管理，这使得它们非常重量，并赋予它们与其他内核管理对象（例如文件）类似的属性。它们可以被多个进程使用，可以通过名称进行命名和定位，并且支持细粒度的权限，类似于文件。例如，可以允许一个进程等待某个对象，而不允许它通过该对象发送信号来唤醒其他进程。
 
 这些重量级的内核管理同步对象包括 Mutex（可以锁定和解锁）、Event（可以发送信号和等待）以及 WaitableTimer（可以在选择的时间后或定期自动发送信号）。创建这样的对象会得到一个句柄（HANDLE），就像打开一个文件一样，可以轻松地传递并与常规的 HANDLE 函数一起使用，特别是一系列的等待函数。这些函数允许我们等待各种类型的一个或多个对象，包括重量级同步原语、进程、线程和各种形式的 I/O。
 
 ### 轻量级对象
+
+（[英文版本](https://marabos.nl/atomics/os-primitives.html#lighter-weight-objects)）
 
 在 Windows API 中，一个轻量级的同步原语包括是“临界区[^4]”（critical section）。
 
@@ -377,6 +403,8 @@ CRITICAL_SECTION 使用 `InitializeCriticalSection()` 函数来初始化，使�
 > 在 Rust 1.51 之前，Windows XP 上的 `std::sync::Mutex` 基于（Box 的内存分配）CRITICAL_SECTION 对象。（Rust 1.51 放弃了对 Windows XP 的支持。）
 
 #### 精简的读写（SRW）锁[^5]
+
+（[英文版本](https://marabos.nl/atomics/os-primitives.html#windows-srw)）
 
 从 Windows Vista（和 Windows Server 2008）开始，Windows API 包含了一个非常轻量级的优秀锁原语：*精简读写锁*，简称 *SRW 锁*。
 
@@ -396,6 +424,8 @@ SRW 锁与条件变量一起引入了 Windows API。`CONDITION_VARIABLE` 仅占�
 
 ### 基于地址的等待
 
+（[英文版本](https://marabos.nl/atomics/os-primitives.html#address-based-waiting)）
+
 Windows 8（和 Windows Server 2012）引入了一种新的、更灵活的同步功能类型，非常类似于本章前面讨论的 Linux `FUTEX_WAIT` 和 `FUTEX_WAKE` 操作。
 
 `WaitOnAdderss` 函数可以操作 8 位、16 位、32 位 或 64 位的原子变量。它接收了 4 个参数：原子变量地址、保存期望值的变量地址、原子变量大小（以字节为单位）以及在放弃之前的最大等待最大毫秒数（或者无限超时的 `u32::MAX`）。
@@ -407,6 +437,8 @@ Windows 8（和 Windows Server 2012）引入了一种新的、更灵活的同步
 Windows API 的一些（但不是全部）同步原语是使用这些函数实现的。更重要的是，它们是构建我们自己的原始物的绝佳基石，我们将在[第九章](./9_Building_Our_Own_Locks.md)中这样做。
 
 ## 总结
+
+（[英文版本](https://marabos.nl/atomics/os-primitives.html#summary)）
 
 * *系统调用*（syscall）是进入操作系统内核的调用，与普通函数调用相比，相对较慢。
 * 通常，程序不直接进行系统调用，而是通过操作系统的库（如 `libc`）与内核进行交互。在许多操作系统中，这是与内核进行交互的唯一支持方式。

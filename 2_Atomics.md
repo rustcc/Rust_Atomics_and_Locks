@@ -1,5 +1,7 @@
 # 第二章：Atomic
 
+（[英文版本](https://marabos.nl/atomics/atomics.html)）
+
 *原子*（atomic）这个单词来自于希腊语 `ἄτομος`，意味着不可分割的，不能被切割成更小的块。在计算机科学中，它被用于描述一个不可分割的操作：它要么完全完成，要么还没发生。
 
 正如在[第一章“借用和数据竞争”](./1_Basic_of_Rust_Concurrency.md#借用和数据竞争)中提及的，多线程并发地读取和修改相同的变量会导致未定义行为。然而，原子操作确实允许不同线程去安全地读取和修改相同的变量。因为该操作是不可分割的，它要么完全地在一个操作之前完成，要么在另一个操作之后完成，从而避免未定义行为。稍后，[在第七章](./7_Understanding_the_Processor.md)，我们将在硬件层面查看它们是如何工作的。
@@ -22,6 +24,8 @@
 
 ## Atomic 的加载和存储操作
 
+（[英文版本](https://marabos.nl/atomics/atomics.html#atomic-load-and-store-operations)）
+
 我们将查看的前两个原子操作是最基本的：load 和 store。它们的函数签名如下，使用 AtomicI32 作为示例：
 
 ```rust
@@ -36,6 +40,8 @@ load 方法以原子方式加载存储在原子变量中的值，并且 store �
 让我们来看看这两种方式的使用示例。
 
 ### 示例：停止标识
+
+（[英文版本](https://marabos.nl/atomics/atomics.html#example-stop-flag)）
 
 第一个示例使用 AtomicBool 作为*停止标识*。这个标识被用于告诉其它线程去停止运行：
 
@@ -78,6 +84,8 @@ fn main() {
 
 ### 示例：进度报道
 
+（[英文版本](https://marabos.nl/atomics/atomics.html#example-progress-reporting)）
+
 在我们的下一个示例中，我们通过后台线程逐步地处理 100 项，而主线程为用户提供定期地更新：
 
 ```rust
@@ -113,6 +121,8 @@ fn main() {
 每次后台线程完成处理项时，它都会将处理的项目数量存储在 AtomicUsize 中。与此同时，主线程向用户显示该数字，告知该进度，大约每秒一次。一旦主线程看见所有 10 项已经被处理，它就会退出作用域，它会隐式地 join 后台线程，并且告知用户所有都完成。
 
 #### 同步
+
+（[英文版本](https://marabos.nl/atomics/atomics.html#synchronization)）
 
 一旦最后一项处理完成，主线程可能需要整整一秒才知道，从而在最后引入不必要的延迟。为了解决这个，我们在每当有新的消息有用时，可以使用阻塞（[第一章“线程阻塞”](./1_Basic_of_Rust_Concurrency.md#线程阻塞)）去唤醒睡眠中的主线程。
 
@@ -153,6 +163,8 @@ fn main() {
 
 ### 示例：惰性初始化
 
+（[英文版本](https://marabos.nl/atomics/atomics.html#example-lazy-init)）
+
 在移动到更高级的原子操作之前，最后一个示例是关于*惰性初始化*。
 
 想象有一个值 x，我们从一个文件读取它，从操作系统获取，或者以其他方式计算，我们期待去在程序运行期间它是一个常量。获取 x 是操作系统的版本、内存的总数或者 tau 的第 400 位。对于这个示例，这真的不重要。
@@ -184,6 +196,8 @@ fn get_x() -> u64 {
 如果 `calculate_x()` 预计花费很长时间，则最好在第一个线程仍在初始化 X 时等待线程，以避免不必要的浪费处理器时间。你可以使用一个条件变量或者线程阻塞（[第一章“等待-阻塞和条件变量”](./1_Basic_of_Rust_Concurrency.md#等待-阻塞park和条件变量)）来实现这个，但是对于一个小例子来说，这很快将变得复杂。Rust 标准库通过 `std::sync::Once` 和 `std::sync::OnceLock` 提供了此功能，所以通常这些不需要由你自己实现。
 
 ## 获取并修改操作
+
+（[英文版本](https://marabos.nl/atomics/atomics.html#fetch-and-modify-operations)）
 
 注意，我们已经看见基础 load 和 store 操作的一些用例，让我们继续更有趣的操作：*获取并修改*（fetch-and-modify）操作。这些操作修改原子变量，但也加载（获取）原始值，作为一个单原子操作。
 
@@ -232,6 +246,8 @@ fetch_add 操作从 100 递增到 123，但是返回给我们还是旧值 100。
 
 ### 示例：来自多线程的进度报道
 
+（[英文版本](https://marabos.nl/atomics/atomics.html#example-progress-reporting-from-multiple-threads)）
+
 在[“示例：进度报道”](#示例进度报道)中，我们使用一个 AtomicUsize 去报道后台线程的进度。如果我们把工作分开，例如，四个线程，每个处理 25 个项目，我们将需要知道所有 4 个线程的进度。
 
 我们可以为每个线程使用单独的 AtomicUsize 并且在主线程加载它们并进行汇总，但是更简单的解决方案是，使用单个 AtomicUsize 去跟踪所有线程处理项的总数。
@@ -275,6 +291,8 @@ fn main() {
 撇开闭包的微妙不谈，在这里使用 fetch_add 更改是非常简单的。我们并不知道线程将以哪种顺序递增 num_done，但由于加操作是原子的，我们并不担心任何事情，并且当所有线程完成，可以确信它将是 100。
 
 ### 示例：统计数据
+
+（[英文版本](https://marabos.nl/atomics/atomics.html#example-statistics)）
 
 继续通过原子报道其他线程正在做什么的概念，让我们拓展我们的示例，也可以收集和报道一些关于处理项目所花费时间的统计数据。
 
@@ -336,6 +354,8 @@ fn main() {
 
 ### 示例：ID 分配
 
+（[英文版本](https://marabos.nl/atomics/atomics.html#example-id-allocation)）
+
 让我们转到一个用例，我们实际上需要 `fetch_add` 的返回值。
 
 假设我们需要一些函数，`allocate_new_id()`，每次调用它时，都会给出新的唯一的数字。我们可能使用这些数字标识程序中的任务或其它事情；需要一个小而易于存储和在线程之间传递的东西来唯一标识事物，例如整数。
@@ -396,6 +416,8 @@ fn allocate_new_id() -> u32 {
 第三种处理溢出的方式可以说是唯一正确的方式，因为如果它溢出，它完全可以阻止加操作发生。然而，我们不能使用迄今为止看到的原子操作实现这一点。为此，我们需要「比较并交换」操作，接下来我们将探索。
 
 ## 比较并交换操作
+
+（[英文版本](https://marabos.nl/atomics/atomics.html#cas)）
 
 更加高级和灵活的原子操作是*比较并交换*操作。这个操作检查是否原子值等同于给定的值，只有在这种情况下，它才以原子地方式使用新值替换它，作为单个操作完成。它会返回先前的值，并告诉我们是否进行了替换。
 
@@ -464,6 +486,8 @@ fn increment(a: &AtomicU32) {
 
 ### 示例：没有溢出的 ID 分配
 
+（[英文版本](https://marabos.nl/atomics/atomics.html#example-handle-overflow)）
+
 现在，从[“示例：ID 分配”](#示例id-分配)中回到 `allocate_new_id()` 的溢出问题。
 
 为了停止递增 NEXT_ID 超过某个限制以阻止溢出，我们可以使用 compare_exchange 去实现具有上限的原子操作加。使用这个想法，让我们制作一个 allocate_new_id 的版本，该版本始终正确处理溢出，即使在几乎不可能的情况下也是如此：
@@ -501,6 +525,8 @@ fn allocate_new_id() -> u32 {
 
 ### 示例：惰性一次性初始化
 
+（[英文版本](https://marabos.nl/atomics/atomics.html#example-racy-init)）
+
 在[“示例：惰性初始化”](#示例惰性初始化)中，我们查看常量值的惰性初始化示例。我们做了一个函数，在第一次调用时懒惰地初始化一个值，但在以后的调用中重用它。当多个线程并发地运行这个函数，多个线程可能执行初始化，并且它们将以不可预期的顺序覆盖彼此的结果。
 
 对于我们期望值是常量，或者当我们不关心改变值时，这很好。然而，也有些用例，这些值每次都会初始化不同的值，即使我们需要在程序的一次运行中返回相同的值。
@@ -535,6 +561,8 @@ fn get_key() -> u64 {
 正如[“示例：惰性初始化”](#示例惰性初始化)中提到的，如果 `generate_random_key()` 需要大量时间，那么在初始化期间阻塞线程可能更有意义，以避免可能花费时间生成不会使用的密钥。Rust 标准库通过 `std::sync::Once` 和 `std::sync::OnceLock` 提供此类功能。
 
 ## 总结
+
+（[英文版本](https://marabos.nl/atomics/atomics.html#summary)）
 
 * 原子操作是不可分割的；它们要么完整的完成，要么它们还没有发生。
 * 在 Rust 中的原子操作是通过 `std::sync::atomic` 原子类型完成的，例如 `AtomicI32`。

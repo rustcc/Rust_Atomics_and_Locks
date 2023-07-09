@@ -1,10 +1,14 @@
 # 第六章：构建我们自己的“Arc”
 
+（[英文版本](https://marabos.nl/atomics/building-arc.html)）
+
 在[第一章“引用计数”](./1_Basic_of_Rust_Concurrency.md#引用计数)中，我们了解了 `std::sync::Arc<T>` 类型允许通过引用计数共享所有权。`Arc::new` 函数创建一个新的内存分配，就像 `Box::new`。然而，与 Box 不同的是，克隆 Arc 将共享原始的内存分配，而不是创建一个新的。只有当 Arc 和所有其他的克隆被丢弃，共享的内存分配才会被丢弃。
 
 这种类型的实现所涉及的内存排序可能是非常有趣的。在本章中，我们将通过实现我们自己的 `Arc<T>` 将更多理论付诸实践。我们将开始一个基础的版本，然后将其扩展到支持循环结构的 *weak 指针*，并且最终将其优化为一个与标准库差不多的实现结束本章。
 
 ## 基础的引用计数
+
+（[英文版本](https://marabos.nl/atomics/building-arc.html#basic-reference-counting)）
 
 我们的第一个版本将使用单个 `AtomicUsize` 去计数 Arc 对象共享分配的数量。让我们开始使用一个持有计数器和 T 对象的结构体：
 
@@ -137,6 +141,8 @@ impl<T> Drop for Arc<T> {
 
 ### 测试它
 
+（[英文版本](https://marabos.nl/atomics/building-arc.html#testing-it)）
+
 为了测试我们的 Arc 是否按预期运行，我们可以编写一个单元测试，创建一个包含特殊对象的 `Arc`，让我们知道何时它被丢弃时：
 
 ```rust
@@ -196,6 +202,8 @@ fn test() {
 
 ### 可变性
 
+（[英文版本](https://marabos.nl/atomics/building-arc.html#mutation)）
+
 正如之前提及的，我们不能为我们的 Arc 实现 DerefMut。我们不能无条件地承诺对数据的独占访问（`&mut T`），因为它能够通过其他 Arc 对象访问。
 
 然而，我们可以有条件地允许独占访问。我们可以创建一个方法，如果引用计数为 1，则提供 `&mut T`，这证明没有其他 Arc 对象可以用来访问相同的数据。
@@ -226,6 +234,8 @@ fn test() {
 当 `&mut T` 的生命周期过期后，Arc 可以在此被使用以及与其他线程共享。也许有人可能会想知道，在之后访问数据的线程是否需要关注内存排序。然而，这是用于与其他线程共享 Arc（或着新克隆）的机制负责的。（例如 mutex、channel 或者产生的新线程。）
 
 ## Weak 指针
+
+（[英文版本](https://marabos.nl/atomics/building-arc.html#weak-pointers)）
 
 当表示在内存中多个对象组成的结构时，引用计数非常有用。例如，在树结构中的每个节点可以包含对其子节点的 Arc 引用。这样，当我们丢弃一个节点时，不再使用的孩子节点也会被（递归地）丢弃。
 
@@ -450,6 +460,8 @@ impl<T> Arc<T> {
 
 ### 测试它2
 
+（[英文版本](https://marabos.nl/atomics/building-arc.html#arc-weak-test)）
+
 为了快速测试我们创建的内容，我们将修改之前的单元测试，以使用 weak 指针，并验证它们是否可以在预期的情况下升级：
 
 ```rust
@@ -495,6 +507,8 @@ fn test() {
 这也毫无问题地编译和运行，这给我们留下了一个非常可用的手工 Arc 实现。
 
 ### 优化
+
+（[英文版本](https://marabos.nl/atomics/building-arc.html#optimizing-arc)）
 
 虽然 weak 指针是可用的，但 Arc 类型通常用于没有任何 weak 的情况下。我们上次实现的缺点是，克隆和丢弃 Arc 现在都需要两个原子操作，因为它们不得不递增或递减两个计数器。这使得 Arc 用于丢弃 weak 指针的开销增大，即使它们没有使用 weak 指针。
 
@@ -767,6 +781,8 @@ impl<T> Weak<T> {
 > 如果你觉得为这个优化的实现做出正确的内存排序决定很困难，请不要担心。许多并发数据结构比这个更容易正确地实现。本章的 Arc 实现，特别是因为它在内存排序方面具有棘手的微妙之处。
 
 ## 总结
+
+（[英文版本](https://marabos.nl/atomics/building-arc.html#summary)）
 
 * `Arc<T>` 提供一个引用计数分配的共享所有权。
 * 通过检查引用计数是否确实是一个 `Arc<T>`，可以有条件地提供独占访问（`&mut T`）。

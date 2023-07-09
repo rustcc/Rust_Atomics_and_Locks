@@ -1,5 +1,7 @@
 # 第五章：构建我们自己的 Channel
 
+（[英文版本](https://marabos.nl/atomics/building-channels.html)）
+
 *Channel* 可以被用于在线程之间发送数据，并且它们有很多变体。一些 channel 仅能在一个发送者和一个接收者之间使用，而另一些可以在任意数量的线程之间发送，或者甚至允许多个接收者。一些 channel 是阻塞的，这意味着接收（有时也包括发送）是一个阻塞操作，这会使线程进入睡眠状态，知道你的操作完成。一些 channel 针对团兔粮进行优化，而另一些针对低延迟进行优化。
 
 这些变体是无穷尽的，没有一种通用版本在所有场景都适合的。
@@ -7,6 +9,8 @@
 在该章节，我们将实现一个相对简单的 channel，不仅可以探索更多的原子应用，同时也可以了解如何在 Rust 类型系统中捕获我们的需求和假设。
 
 ## 一个简单的以 mutex 为基础的 Channel
+
+（[英文版本](https://marabos.nl/atomics/building-channels.html#a-simple-mutex-based-channel)）
 
 一个基础的 channel 实现并不需要任何关于原子的知识。我们可以接收 `VecDeque`，它根本上是一个 `Vec`，允许在两端高效的添加和移除元素，并使用 Mutex 保护它，以允许多个线程访问。然后，我们使用 `VecDeque` 作为已发送但尚未接受数据的消息队列。任何想要发送消息的线程只需要将其添加到队列的末尾，而任何想要接受消息的线程只需从队列的前端删除一个消息。
 
@@ -58,6 +62,8 @@ impl<T> Channel<T> {
 另一个可能不可取的属性是，该 channel 的队列可能会无限制地增长。没有什么能阻止发送者以比接收者更高的速度持续发送新消息。
 
 ## 一个不安全的一次性 Channel
+
+（[英文版本](https://marabos.nl/atomics/building-channels.html#an-unsafe-one-shot-channel)）
 
 channel 的各种用例几乎是无止尽的。然而，在本章的剩余部分，我们将专注于一种特定类型的用例：恰好从一个线程向另一个线程发送一条消息。为此类用例设计的 channel 通常被称为 *一次性*（one-shot）channel。
 
@@ -142,6 +148,8 @@ impl<T> Channel<T> {
 由于我们让用户对一切负责，不幸的事故只是时间问题。
 
 ## 通过运行时检查来达到安全
+
+（[英文版本](https://marabos.nl/atomics/building-channels.html#safety-through-runtime-checks)）
 
 为了提供更安全的接口，我们可以增加一些检查，以确保误用会导致 panic 并显示清晰的错误信息，这比未定义行为要好得多。
 
@@ -344,6 +352,8 @@ impl&lt;T&gt; Drop for Channel&lt;T&gt; {
 
 ## 通过类型来达到安全
 
+（[英文版本](https://marabos.nl/atomics/building-channels.html#safety-through-types)）
+
 尽管我们已经成功地保护了我们 Channel 的用户免受未定义行为的问题，但是如果它们偶尔地不正确使用它，它们仍然有 panic 的风险。理想情况下，编译器将在程序运行之前检查正确的用法并指出滥用。
 
 让我们来看看调用 send 或 receive 不止一次的问题。
@@ -507,6 +517,8 @@ note: this function takes ownership of the receiver `self`, which moves `sender`
 
 ## 借用以避免内存分配
 
+（[英文版本](https://marabos.nl/atomics/building-channels.html#borrowing-to-avoid-allocation)）
+
 我们刚刚基于 Arc 的 channel 实现的设计可以非常方便的使用——代价是一些性能，因为它得内存分配。如果我们想要优化效率，我们可以通过用户对共享的 Channel 对象负责来获取一些性能。我们可以强制用户去创建一个通过可以由 Sender 和 Receiver 借用的 Channel，而不是在幕后处理 Channel 内存分配和所有权。这样，它们可以选择简单地放置 Channel 在局部变量中，从而避免内存分配的开销。
 
 我们将也在一定程度上牺牲简洁性，因为我们现在不得不处理借用和生命周期。
@@ -626,6 +638,8 @@ fn main() {
 
 ## 阻塞
 
+（[英文版本](https://marabos.nl/atomics/building-channels.html#blocking)）
+
 让我们最终处理一下我们 Channel 最后留下的最大不便，阻塞接口的缺乏。我们测试一个新的 channel 变体，每次都使用线程阻塞函数。将这种模式本身整合到 channel 应该不是太难。
 
 为了能够释放接收者，发送者需要知道去释放哪个线程。`std::thread::Thread` 类型表示线程的句柄，正是我们调用 `unpark()` 所需要的。我们将把句柄存储到 Sender 对象内的接收线程，如下所示：
@@ -721,6 +735,8 @@ fn main() {
 我们很容易花费大量的时间实现 20 个一次性 channel 不同的变体，每个变体都具有不同的属性，适用于每个可以想象到的用例甚至更多。尽管这听起来很有趣，但是我们应该避免陷入这个歧途，并在事情失控之前结束本章。
 
 ## 总结
+
+（[英文版本](https://marabos.nl/atomics/building-channels.html#summary)）
 
 * *channel* 用于在线程之间发送*消息*。
 * 一个简单、灵活但可能效率低下的 channel，只需一个 `Mutex` 和 `Condvar` 就很容易实现。

@@ -1,5 +1,7 @@
 # 第四章：构建我们自己的自旋锁
 
+（[英文版本](https://marabos.nl/atomics/building-spinlock.html)）
+
 对普通互斥锁（参见[第一章中的“锁：互斥锁和读写锁”](./1_Basic_of_Rust_Concurrency.md#锁互斥锁和读写锁)）进行加锁时，如果互斥锁已经被锁定，线程将被置于睡眠状态。这避免在等待锁被释放时浪费资源。如果一个锁只会被短暂地持有，并且锁定它的线程可以在不同的处理器核心并发地运行，那么线程最好反复尝试锁定它而不实际进入睡眠态。
 
 自旋锁是能够做到这一点的 mutex。试图锁定一个已经锁定的 mutex 将导致*忙碌循环*或者*自旋*：一遍又一遍的尝试。直到它成功。这可能浪费处理器周期，但有时会导致锁定时的延迟更低。
@@ -9,6 +11,8 @@
 在该章节总，我们将建造我们自己的 `SpinLock` 类型，应用我们已经在第 [2](./2_Atomics.md) 章和第 [3](./3_Memory_Ordering.md) 章学习的，并且了解如何使用 Rust 的类型系统为我们的 SpinLock 用户提供安全且有用的接口。
 
 ## 一个最小实现
+
+（[英文版本](https://marabos.nl/atomics/building-spinlock.html#a-minimal-implementation)）
 
 让我们从头实现这样的自旋锁。
 
@@ -65,6 +69,8 @@ impl SpinLock {
 图 4-1。在使用 `SpinLock` 保护对某些共享数据访问的两个线程之间的 happens-before 关系。
 
 ## 一个不安全的自旋锁
+
+（[英文版本](https://marabos.nl/atomics/building-spinlock.html#an-unsafe-spin-lock)）
 
 我们上面实现的 SpinLock 类型有一个完全安全地接口，它并不会引起任何未定义行为。然而，在大多数的使用案列中，它将被用于保护共享变量的可变性，这意味着用于将仍然使用一个不安全的、未检查的代码。
 
@@ -148,6 +154,8 @@ pub unsafe fn unlock(&self) {
 ```
 
 ## 使用锁守卫的安全接口
+
+（[英文版本](https://marabos.nl/atomics/building-spinlock.html#building-safe-spinlock)）
 
 为了能够提供一个完全安全地接口，我们需要将解锁操作绑定到 `&mut T` 的末尾。我们可以通过将此引用包装成我们自己的类型来做到这一点，该类型的行为类似于引用，但也实现了 Drop trait，以便在它被丢弃时做一些事情。
 
@@ -272,6 +280,8 @@ error[E0382]: borrow of moved value: `g`
 多亏了 Rust 的类型系统，我们可以放心，在我们运行程序之前，这样的错误就已经被发现了。
 
 ## 总结
+
+（[英文版本](https://marabos.nl/atomics/building-spinlock.html#summary)）
 
 * 自旋锁是在等待时忙碌循环或自选的 mutex。
 * 自旋可以**减少**延迟，但也可能浪费时钟周期并降低性能。

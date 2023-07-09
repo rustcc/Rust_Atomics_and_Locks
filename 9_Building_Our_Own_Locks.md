@@ -1,5 +1,7 @@
 # 第九章：构建我们自己的「锁」
 
+（[英文版本](https://marabos.nl/atomics/building-locks.html)）
+
 在该章节，我们将建造属于我们自己的互斥锁（`mutex`）[^3]、条件变量（`condition variable`）[^4]以及读写锁（`reader-writer lock`）[^5]。对于它们中的任何一个，我们都会从一个非常基础的版本开始，然后扩展它以使其更高效。
 
 由于我们并不会使用来自标准库中的锁类型（因为这将是作弊行为），因此我们将不得不使用来自[第八章](./8_Operating_System_Primitives.md)的工具，才能够在不忙碌循环（`busy-looping`[^1]）的情况下使线程等待。然而，正如我们在该章节看到的，操作系统提供的可用工具因平台而异，因此很难去构建跨平台工作的东西。
@@ -37,6 +39,8 @@
 现在，我们已经有基础的知识，让我们开始吧。
 
 ## Mutex
+
+（[英文版本](https://marabos.nl/atomics/building-locks.html#mutex)）
 
 在构建 `Mutex<T>` 时，我们将接收来自[第四章](./4_Building_Our_Own_Spin_Lock.md)的 `SpinLock<T>` 类型。在不涉及阻塞的部分，例如守护类型的设计，将保持不变。
 
@@ -145,6 +149,8 @@ impl<T> Drop for MutexGuard<'_, T> {
 
 ### 避免系统调用
 
+（[英文版本](https://marabos.nl/atomics/building-locks.html#mutex-avoid-syscalls)）
+
 到目前为止，我们 mutex 中最慢的部分是等待和唤醒，因为这（可能）导致一个*系统调用*，即对操作系统内核的调用。像这样与内核交互是一个相当复杂的过程，往往相当缓慢，尤其是与原子操作比较。因此，对于一个高性能 mutex 的实现，我们应该尽可能尝试去避免等待和唤醒调用。
 
 幸运地是，我们已经走了一半。因为在 `wait()` 调用之前，我们的锁定函数 `while` 循环才会检查状态，因此在 mutex 未锁定的情况下，等待操作在这种情况下将完全地跳过，我们并不需要等待。然而，我们在解锁时，会无条件地调用 `wake_one()` 函数。
@@ -200,6 +206,8 @@ impl<T> Drop for MutexGuard<'_, T> {
 *图 9-1。两个线程之间 happens-before 的关系同时试图锁定我们的 mutex。*
 
 ### 进一步优化
+
+（[英文版本](https://marabos.nl/atomics/building-locks.html#optimizing-further)）
 
 在这一点上，我们似乎没有什么可以进一步优化的了。在未考虑的情况下，我们执行零系统调用，并且剩下的只是两个非常简单的原子操作。
 
@@ -272,6 +280,8 @@ fn lock_contended(state: &AtomicU32) {
 
 ### 基准测试
 
+（[英文版本](https://marabos.nl/atomics/building-locks.html#benchmarking)）
+
 测试 mutex 实现的性能是很难的。写基准测试和得到一些数字很容易，但是很难去得到一些有意义的数字。
 
 优化 mutex 的实现以在特定基准测试表现良好是相对容易的，但这并没有很有用。毕竟，关键是去做一些在真实世界良好的东西，而不仅是测试程序。
@@ -333,6 +343,8 @@ fn main() {
 总之，不幸的是，关于自旋是否真正提高性能的答案是“这取决于平台等”，即使只看一个场景。
 
 ## 条件变量
+
+（[英文版本](https://marabos.nl/atomics/building-locks.html#condition-variable)）
 
 让我们做一些更有趣的事情：实现一个条件变量。
 
@@ -461,6 +473,8 @@ fn test_condvar() {
 
 ### 避免系统调用2
 
+（[英文版本](https://marabos.nl/atomics/building-locks.html#avoiding-syscalls)）
+
 正如我们在[“Mutex：避免系统调用”](#避免系统调用)中的那样，优化一个锁定原语主要是避免不需要的等待和唤醒操作。
 
 就我们的条件变量而言，在我们的 `Condvar::wait()` 实现中尝试避免 `wait()` 调用没有多大用处。当线程决定条件变量时，它已经检查了它正在等待的事情还没有发生，并且它需要进入睡眠。如果不需要等待，它根本就不用调用 `Condvar::wait()`。
@@ -542,6 +556,8 @@ impl Condvar {
 
 ### 避免虚假唤醒
 
+（[英文版本](https://marabos.nl/atomics/building-locks.html#avoiding-spurious-wake-ups)）
+
 另一个方式是通过避免虚假唤醒来优化我们的条件变量。每次线程被唤醒时，它将尝试锁定 mutex，这可能与其它线程产生竞争，这可能在性能上有一个巨大的影响。
 
 底层 `wait()` 操作偶尔会虚假唤醒是很罕见的，但是我们的条件变量实现很容易使得 `notify_one()` 导致不止一个线程去停止等待。如果一个线程正在进入睡眠的过程，刚刚加载了 counter 的值，但是仍然没有进入睡眠，那么调用 `notify_one()` 将由于更新的 counter 从而阻止线程进入睡眠状态，但也会因为后续的 `wake_one()` 操作导致第二个线程唤醒。这两个线程将先后竞争 mutex，浪费宝贵的处理器时间。
@@ -586,6 +602,8 @@ impl Condvar {
 </div>
 
 ## 读写锁
+
+（[英文版本](https://marabos.nl/atomics/building-locks.html#reader-writer-lock)）
 
 是时候实现读写锁了。
 
@@ -743,6 +761,8 @@ impl<T> Drop for WriteGuard<'_, T> {
 
 ### 避免 writer 忙碌循环
 
+（[英文版本](https://marabos.nl/atomics/building-locks.html#avoiding-busy-looping-writers)）
+
 我们实现的一个问题是写锁可能导致意外地忙碌循环。
 
 如果我们有一个很多 reader 重复锁定和解锁的 RwLock，那么锁定状态可能会持续变化，重复上下波动。对于我们的 `write` 方法，这导致了在「比较并交换」操作和随后的 `wait()` 操作之间发生锁定状态的变化可能很大，尤其 `wait()` 操作（相对缓慢地）作为系统调用直接实现。这意味着 `wait()` 操作将立即返回，即使锁从未解锁；它只是 reader 数量与预期的不同。
@@ -824,6 +844,8 @@ impl<T> Drop for WriteGuard<'_, T> {
 > 在以上的 `drop` 实现中，例如，如果 `wake_one()` 操作将表示它却是能唤醒一个性能，我们可能跳过 `wake_all()` 调用。
 
 ### 避免 writer 陷入饥饿
+
+（[英文版本](https://marabos.nl/atomics/building-locks.html#avoiding-writer-starvation)）
 
 RwLock 的一个通常用例是频繁使用 reader 的情况，但是非常少，通常仅有一个，不经常的 writer 的情况。例如，一个线程可能负责读取一些传感器输入或者定期下载许多其它线程需要使用的新数据。
 
@@ -946,6 +968,8 @@ impl<T> Drop for WriteGuard<'_, T> {
 然而，对于更普遍目的的读写锁定，这绝对是值得进一步优化的，这使写锁定和解锁的性能接近于高效的 3 个状态的互斥锁性能。这对读者来说是一个有趣的练习。
 
 ## 总结
+
+（[英文版本](https://marabos.nl/atomics/building-locks.html#summary)）
 
 * atomic-wait crate 提供了一个基础的类 futex 功能，适用于所有主要的操作系统（最新版本）。
 * 一个最小的实现仅需要两个状态，像我们来自[第四章](./4_Building_Our_Own_Spin_Lock.md)的 `SpinLock`。
