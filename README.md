@@ -139,7 +139,7 @@
 * [无锁链表](./10_Ideas_and_Inspiration.md#无锁链表)
 * [基于队列的锁](./10_Ideas_and_Inspiration.md#基于队列的锁)
 * [基于阻塞的锁](./10_Ideas_and_Inspiration.md#基于阻塞的锁)
-* [顺序锁](./10_Ideas_and_Inspiration.md#顺序锁spinlock)
+* [顺序锁](./10_Ideas_and_Inspiration.md#顺序锁sequence-lock)
 * [教学材料](./10_Ideas_and_Inspiration.md#教学材料)
 
 注明：本文译自 <https://marabos.nl/atomics/>，若其它平台引用此翻译，也请注明出处。
