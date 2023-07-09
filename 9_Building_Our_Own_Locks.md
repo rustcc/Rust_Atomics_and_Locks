@@ -44,8 +44,8 @@
 
 ```rust
 pub struct Mutex<T> {
-    /// 0: unlocked
-    /// 1: locked
+    /// 0: 解锁
+    /// 1: 锁定
     state: AtomicU32,
     value: UnsafeCell<T>,
 }
@@ -82,7 +82,7 @@ impl<T> DerefMut for MutexGuard<'_, T> {
 impl<T> Mutex<T> {
     pub const fn new(value: T) -> Self {
         Self {
-            state: AtomicU32::new(0), // unlocked state
+            state: AtomicU32::new(0), // 解锁状态
             value: UnsafeCell::new(value),
         }
     }
@@ -99,10 +99,10 @@ impl<T> Mutex<T> {
 
 ```rust
     pub fn lock(&self) -> MutexGuard<T> {
-        // Set the state to 1: locked.
+        // 设置 state 到 1：锁定
         while self.state.swap(1, Acquire) == 1 {
-            // If it was already locked..
-            // .. wait, unless the state is no longer 1.
+            // 如果它已经锁定..
+            // .. 等待，知道 state 不再是 1。
             wait(&self.state, 1);
         }
         MutexGuard { mutex: self }
@@ -120,9 +120,9 @@ impl<T> Mutex<T> {
 ```rust
 impl<T> Drop for MutexGuard<'_, T> {
     fn drop(&mut self) {
-        // Set the state back to 0: unlocked.
+        // 设置 state 回到 0：解锁。
         self.mutex.state.store(0, Release);
-        // Wake up one of the waiting threads, if any.
+        // 如果有，唤醒其中一个等待的线程。
         wake_one(&self.mutex.state);
     }
 }
@@ -155,9 +155,9 @@ impl<T> Drop for MutexGuard<'_, T> {
 
 ```rust
 pub struct Mutex<T> {
-    /// 0: unlocked
-    /// 1: locked, no other threads waiting
-    /// 2: locked, other threads waiting
+    /// 0: 解锁
+    /// 1: 锁定，没有其他线程等待
+    /// 2: 锁定，有其他线程等待
     state: AtomicU32,
     value: UnsafeCell<T>,
 }
@@ -219,7 +219,7 @@ impl<T> Mutex<T> {
 
     pub fn lock(&self) -> MutexGuard<T> {
         if self.state.compare_exchange(0, 1, Acquire, Relaxed).is_err() {
-            // The lock was already locked. :(
+            // 锁已经被锁定。:(
             lock_contended(&self.state);
         }
         MutexGuard { mutex: self }
@@ -386,12 +386,12 @@ impl Condvar {
    pub fn wait<'a, T>(&self, guard: MutexGuard<'a, T>) -> MutexGuard<'a, T> {
         let counter_value = self.counter.load(Relaxed);
 
-        // Unlock the mutex by dropping the guard,
-        // but remember the mutex so we can lock it again later.
+        // 通过丢弃 guard 解锁 mutex，
+        // 但要记住 mutex，以便稍后可以再次锁定它。
         let mutex = guard.mutex;
         drop(guard);
 
-        // Wait, but only if the counter hasn't changed since unlocking.
+        // 等待，但仅当 counter 自解锁以来仍为改变。
         wait(&self.counter, counter_value);
 
         mutex.lock()
@@ -449,8 +449,8 @@ fn test_condvar() {
         assert_eq!(*m, 123);
     });
 
-    // Check that the main thread actually did wait (not busy-loop),
-    // while still allowing for a few spurious wake ups.
+    // 检查主线程是否确实等待（不是忙碌循环），
+    // 同时仍然允许一些虚假的唤醒。
     assert!(wakeups < 10);
 }
 ```
@@ -474,14 +474,14 @@ fn test_condvar() {
 ```rust
 pub struct Condvar {
     counter: AtomicU32,
-    num_waiters: AtomicUsize, // New!
+    num_waiters: AtomicUsize, // 新增！
 }
 
 impl Condvar {
     pub const fn new() -> Self {
         Self {
             counter: AtomicU32::new(0),
-            num_waiters: AtomicUsize::new(0), // New!
+            num_waiters: AtomicUsize::new(0), // 新增！
         }
     }
 
@@ -495,14 +495,14 @@ impl Condvar {
 
 ```rust
     pub fn notify_one(&self) {
-        if self.num_waiters.load(Relaxed) > 0 { // New!
+        if self.num_waiters.load(Relaxed) > 0 { // 新增！
             self.counter.fetch_add(1, Relaxed);
             wake_one(&self.counter);
         }
     }
 
     pub fn notify_all(&self) {
-        if self.num_waiters.load(Relaxed) > 0 { // New!
+        if self.num_waiters.load(Relaxed) > 0 { // 新增！
             self.counter.fetch_add(1, Relaxed);
             wake_all(&self.counter);
         }
@@ -515,7 +515,7 @@ impl Condvar {
 
 ```rust
     pub fn wait<'a, T>(&self, guard: MutexGuard<'a, T>) -> MutexGuard<'a, T> {
-        self.num_waiters.fetch_add(1, Relaxed); // New!
+        self.num_waiters.fetch_add(1, Relaxed); // 新增！
 
         let counter_value = self.counter.load(Relaxed);
 
@@ -524,7 +524,7 @@ impl Condvar {
 
         wait(&self.counter, counter_value);
 
-        self.num_waiters.fetch_sub(1, Relaxed); // New!
+        self.num_waiters.fetch_sub(1, Relaxed); // 新增！
 
         mutex.lock()
     }
@@ -597,7 +597,7 @@ impl Condvar {
 
 ```rust
 pub struct RwLock<T> {
-    /// The number of readers, or u32::MAX if write-locked.
+    /// reader 的数量，或者如果写锁定则是 u32::MAX。
     state: AtomicU32,
     value: UnsafeCell<T>,
 }
@@ -615,7 +615,7 @@ unsafe impl<T> Sync for Rwlock<T> where T: Send + Sync {}
 impl<T> RwLock<T> {
     pub const fn new(value: T) -> Self {
         Self {
-            state: AtomicU32::new(0), // Unlocked.
+            state: AtomicU32::new(0), // 解锁！
             value: UnsafeCell::new(value),
         }
     }
@@ -699,7 +699,7 @@ impl<T> Deref for ReadGuard<'_, T> {
         while let Err(s) = self.state.compare_exchange(
             0, u32::MAX, Acquire, Relaxed
         ) {
-            // Wait while already locked.
+            // 当它已锁定，则等待
             wait(&self.state, s);
         }
         WriteGuard { rwlock: self }
@@ -716,7 +716,7 @@ impl<T> Deref for ReadGuard<'_, T> {
 impl<T> Drop for ReadGuard<'_, T> {
     fn drop(&mut self) {
         if self.rwlock.state.fetch_sub(1, Release) == 1 {
-            // Wake up a waiting writer, if any.
+            // 如果有，唤醒一个等待的 writer。
             wake_one(&self.rwlock.state);
         }
     }
@@ -731,7 +731,7 @@ writer 必须重设 state 到 0 以解锁，之后它应该唤醒一个等待的
 impl<T> Drop for WriteGuard<'_, T> {
     fn drop(&mut self) {
         self.rwlock.state.store(0, Release);
-        // Wake up all waiting readers and writers.
+        // 唤醒所有等待的 reader 和 writer。
         wake_all(&self.rwlock.state);
     }
 }
@@ -753,10 +753,10 @@ impl<T> Drop for WriteGuard<'_, T> {
 
 ```rust
 pub struct RwLock<T> {
-    /// The number of readers, or u32::MAX if write-locked.
+    /// reader 的数量，或者如果写锁定，则是 u32::MAX。
     state: AtomicU32,
-    /// Incremented to wake up writers.
-    writer_wake_counter: AtomicU32, // New!
+    /// 唤醒 writer 的数量。
+    writer_wake_counter: AtomicU32, // 新增！
     value: UnsafeCell<T>,
 }
 
@@ -764,7 +764,7 @@ impl<T> RwLock<T> {
     pub const fn new(value: T) -> Self {
         Self {
             state: AtomicU32::new(0),
-            writer_wake_counter: AtomicU32::new(0), // New!
+            writer_wake_counter: AtomicU32::new(0), // 新增！
             value: UnsafeCell::new(value),
         }
     }
@@ -782,8 +782,8 @@ impl<T> RwLock<T> {
         ).is_err() {
             let w = self.writer_wake_counter.load(Acquire);
             if self.state.load(Relaxed) != 0 {
-                // Wait if the RwLock is still locked, but only if
-                // there have been no wake signals since we checked.
+                // 如果 RwLock 仍然锁定，但前提是
+                // 自从我们检查以来仍然没有唤醒信号，则等待。
                 wait(&self.writer_wake_counter, w);
             }
         }
@@ -797,8 +797,8 @@ writer_wake_counter 的 `Acquire` 加载操作将与 `Release` 递增操作形�
 impl<T> Drop for ReadGuard<'_, T> {
     fn drop(&mut self) {
         if self.rwlock.state.fetch_sub(1, Release) == 1 {
-            self.rwlock.writer_wake_counter.fetch_add(1, Release); // New!
-            wake_one(&self.rwlock.writer_wake_counter); // Changed!
+            self.rwlock.writer_wake_counter.fetch_add(1, Release); // 新增！
+            wake_one(&self.rwlock.writer_wake_counter); // 改变!
         }
     }
 }
@@ -812,8 +812,8 @@ happens-before 关系确保 write 方法不能观察到递增的 writer_wake_cou
 impl<T> Drop for WriteGuard<'_, T> {
     fn drop(&mut self) {
         self.rwlock.state.store(0, Release);
-        self.rwlock.writer_wake_counter.fetch_add(1, Release); // New!
-        wake_one(&self.rwlock.writer_wake_counter); // New!
+        self.rwlock.writer_wake_counter.fetch_add(1, Release); // 新增！
+        wake_one(&self.rwlock.writer_wake_counter); // 新增！
         wake_all(&self.rwlock.state);
     }
 }
@@ -839,13 +839,13 @@ RwLock 的一个通常用例是频繁使用 reader 的情况，但是非常少�
 
 ```rust
 pub struct RwLock<T> {
-    /// The number of read locks times two, plus one if there's a writer waiting.
-    /// u32::MAX if write locked.
+    /// 读锁的数量乘以 2，如果有一个 writer 正在等待，则加 1。
+    /// 如果已写锁定，则是 u32::MAX。
     ///
-    /// This means that readers may acquire the lock when
-    /// the state is even, but need to block when odd.
+    /// 这意味着当 state 是偶数时，reader 可能获取锁，
+    /// 但当 state 是奇数时，则是需要阻塞
     state: AtomicU32,
-    /// Incremented to wake up writers.
+    /// 唤醒 writer 的数量。
     writer_wake_counter: AtomicU32,
     value: UnsafeCell<T>,
 }
@@ -857,7 +857,7 @@ pub struct RwLock<T> {
     pub fn read(&self) -> ReadGuard<T> {
         let mut s = self.state.load(Relaxed);
         loop {
-            if s % 2 == 0 { // Even.
+            if s % 2 == 0 { // 偶数
                 assert!(s != u32::MAX - 2, "too many readers");
                 match self.state.compare_exchange_weak(
                     s, s + 2, Acquire, Relaxed
@@ -866,7 +866,7 @@ pub struct RwLock<T> {
                     Err(e) => s = e,
                 }
             }
-            if s % 2 == 1 { // Odd.
+            if s % 2 == 1 { // 奇数
                 wait(&self.state, s);
                 s = self.state.load(Relaxed);
             }
@@ -882,7 +882,7 @@ pub struct RwLock<T> {
     pub fn write(&self) -> WriteGuard<T> {
         let mut s = self.state.load(Relaxed);
         loop {
-            // Try to lock if unlocked.
+            // 如果解锁，尝试去锁定。
             if s <= 1 {
                 match self.state.compare_exchange(
                     s, u32::MAX, Acquire, Relaxed
@@ -891,7 +891,7 @@ pub struct RwLock<T> {
                     Err(e) => { s = e; continue; }
                 }
             }
-            // Block new readers, by making sure the state is odd.
+            // 通过确保 state 是奇数，阻塞新的 reader。
             if s % 2 == 0 {
                 match self.state.compare_exchange(
                     s, s + 1, Relaxed, Relaxed
@@ -900,7 +900,7 @@ pub struct RwLock<T> {
                     Err(e) => { s = e; continue; }
                 }
             }
-            // Wait, if it's still locked
+            // 如果它仍然锁定，则等待。
             let w = self.writer_wake_counter.load(Acquire);
             s = self.state.load(Relaxed);
             if s >= 2 {
@@ -916,11 +916,11 @@ pub struct RwLock<T> {
 ```rust
 impl<T> Drop for ReadGuard<'_, T> {
     fn drop(&mut self) {
-        // Decrement the state by 2 to remove one read-lock.
+        // 将 state 递减 2，以移除一个读锁。
         if self.rwlock.state.fetch_sub(2, Release) == 3 {
-            // If we decremented from 3 to 1, that means
-            // the RwLock is now unlocked _and_ there is
-            // a waiting writer, which we wake up.
+            // 如果我们从 3 减少到 1，那意味着 RwLock
+            // 现在是解锁状态，*并且*有一个等待的 writer。
+            // 我们会唤醒它。
             self.rwlock.writer_wake_counter.fetch_add(1, Release);
             wake_one(&self.rwlock.writer_wake_counter);
         }

@@ -10,7 +10,7 @@
 
 与大多数类型不同，它们允许通过共享引用进行修改（例如，`&AtomicU8`）。正如[第一章“内部可变性”](./1_Basic_of_Rust_Concurrency.md#内部可变性)讨论的那样，这都要归功于它。
 
-每一个可用的原子类型都有着相同的接口，包括存储（store）和加载（load）、原子“获取并修改（fetch-and-modify）”操作方法、和一些更高级的“比较并交换（compare-and-exchange）[^4]”方法。我们将在这章节的后半部分讨论它们。
+每一个可用的原子类型都有着相同的接口，包括存储（store）和加载（load）、原子“获取并修改（fetch-and-modify）”操作方法、和一些更高级的“比较并交换”（compare-and-exchange）[^4]方法。我们将在这章节的后半部分讨论它们。
 
 但是，在我们研究不同原子操作之前，我们需要简要谈谈叫做*内存排序*[^1]的概念：
 
@@ -46,14 +46,14 @@ use std::sync::atomic::Ordering::Relaxed;
 fn main() {
     static STOP: AtomicBool = AtomicBool::new(false);
 
-    // Spawn a thread to do the work.
+    // 产生一个线程，去做一些工作。
     let background_thread = thread::spawn(|| {
         while !STOP.load(Relaxed) {
             some_work();
         }
     });
 
-    // Use the main thread to listen for user input.
+    // 使用主线程监听用户的输入。
     for line in std::io::stdin().lines() {
         match line.unwrap().as_str() {
             "help" => println!("commands: help, stop"),
@@ -62,10 +62,10 @@ fn main() {
         }
     }
 
-    // Inform the background thread it needs to stop.
+    // 告知后台线程需要停止。
     STOP.store(true, Relaxed);
 
-    // Wait until the background thread finishes.
+    // 等待直到后台线程完成。
     background_thread.join().unwrap();
 }
 ```
@@ -87,15 +87,15 @@ fn main() {
     let num_done = AtomicUsize::new(0);
 
     thread::scope(|s| {
-        // A background thread to process all 100 items.
+        // 一个后台线程，去处理所有 100 个项。
         s.spawn(|| {
             for i in 0..100 {
-                process_item(i); // Assuming this takes some time.
+                process_item(i); // 假设该处理需要一些时间。
                 num_done.store(i + 1, Relaxed);
             }
         });
 
-        // The main thread shows status updates, every second.
+        // 主线程没秒展示一次状态更新。
         loop {
             let n = num_done.load(Relaxed);
             if n == 100 { break; }
@@ -125,16 +125,16 @@ fn main() {
     let main_thread = thread::current();
 
     thread::scope(|s| {
-        // A background thread to process all 100 items.
+        // // 一个后台线程，去处理所有 100 个项。
         s.spawn(|| {
             for i in 0..100 {
-                process_item(i); // Assuming this takes some time.
+                process_item(i); // 假设该处理需要一些时间。
                 num_done.store(i + 1, Relaxed);
-                main_thread.unpark(); // Wake up the main thread.
+                main_thread.unpark(); // 唤醒主线程
             }
         });
 
-        // The main thread shows status updates.
+        // 主线程展示的状态更新
         loop {
             let n = num_done.load(Relaxed);
             if n == 100 { break; }
@@ -243,17 +243,17 @@ fn main() {
     let num_done = &AtomicUsize::new(0);
 
     thread::scope(|s| {
-        // Four background threads to process all 100 items, 25 each.
+        // 4 个后台线程，去处理所有 100 个项，每个 25 次。
         for t in 0..4 {
             s.spawn(move || {
                 for i in 0..25 {
-                    process_item(t * 25 + i); // Assuming this takes some time.
+                    process_item(t * 25 + i); // 假设此处理需要花费一些时间。
                     num_done.fetch_add(1, Relaxed);
                 }
             });
         }
 
-        // The main thread shows status updates, every second.
+        // 主线程每秒展示一次状态更新。
         loop {
             let n = num_done.load(Relaxed);
             if n == 100 { break; }
@@ -287,12 +287,12 @@ fn main() {
     let max_time = &AtomicU64::new(0);
 
     thread::scope(|s| {
-        // Four background threads to process all 100 items, 25 each.
+        /// 4 个后台线程，去处理所有 100 个项，每个 25 次。
         for t in 0..4 {
             s.spawn(move || {
                 for i in 0..25 {
                     let start = Instant::now();
-                    process_item(t * 25 + i); // Assuming this takes some time.
+                    process_item(t * 25 + i); // 假设此处理需要花费一些时间。
                     let time_taken = start.elapsed().as_micros() as u64;
                     num_done.fetch_add(1, Relaxed);
                     total_time.fetch_add(time_taken, Relaxed);
@@ -301,7 +301,7 @@ fn main() {
             });
         }
 
-        // The main thread shows status updates, every second.
+        // 主线程每秒展示一次状态更新。
         loop {
             let total_time = Duration::from_micros(total_time.load(Relaxed));
             let max_time = Duration::from_micros(max_time.load(Relaxed));
@@ -360,7 +360,7 @@ fn allocate_new_id() -> u32 {
 为了解决这个，如果调用太多次，我们可以试图去使函数 panic，例如这样：
 
 ```rust
-// This version is problematic.
+// 这个版本是有问题的。
 fn allocate_new_id() -> u32 {
     static NEXT_ID: AtomicU32 = AtomicU32::new(0);
     let id = NEXT_ID.fetch_add(1, Relaxed);
@@ -418,17 +418,17 @@ impl AtomicI32 {
 ```rust
 impl AtomicI32 {
     pub fn compare_exchange(&self, expected: i32, new: i32) -> Result<i32, i32> {
-        // In reality, the load, comparison and store,
-        // all happen as a single atomic operation.
+        // 在视线中，加载、比较以及存储操作，
+        // 这些所有都是以单个原子操作发生的。
         let v = self.load();
         if v == expected {
-            // Value is as expected.
-            // Replace it and report success.
+            // 值符合预期
+            // 替换它并报道成功。
             self.store(new);
             Ok(v)
         } else {
-            // The value was not as expected.
-            // Leave it untouched and report failure.
+            // 值不符合预期。
+            // 保持不变并报道失败。
             Err(v)
         }
     }
@@ -551,7 +551,7 @@ fn get_key() -> u64 {
   <a href="./3_Memory_Ordering.html">下一篇，第三章：内存排序</a>
 </p>
 
-[^1]: <https:·//zh.wikipedia.org/wiki/内存排序>
+[^1]: <https://zh.wikipedia.org/wiki/内存排序>
 [^2]: 竞争条件是指多个线程并发访问和修改共享数据时，其最终结果依赖于线程执行的具体顺序。在某些情况下，我们可以利用竞争条件来实现延迟初始化。也就是说，多个线程可以同时尝试对共享资源进行初始化，但只有第一个成功的线程会完成初始化，而其他线程会放弃初始化操作。
 [^3]: 数据竞争是指多个线程同时访问共享数据，并且至少有一个线程进行写操作，而没有适当的同步机制来保证正确的访问顺序。
 [^4]: <https://zh.wikipedia.org/wiki/比较并交换>
