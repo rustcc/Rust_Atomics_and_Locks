@@ -140,7 +140,7 @@ pub fn lock<'a>(&self) -> &'a mut T
 不幸地是，这并不是有效的 Rust。我们必须试图向用户解释这个限制，而不是向编译器解释。为了将责任转移到用户身上，我们将 `unlock` 函数标记为不安全，并给他们留下一张纸条，解释他们需要做什么来保持健全：
 
 ```rust
-/// 安全的：来自 lock() 的 &mut T 必须消失
+/// 安全性：来自 lock() 的 &mut T 必须消失
 /// （并且通过引用该 T 周围的字段来防止欺骗！）
 pub unsafe fn unlock(&self) {
     self.locked.store(false, Release);
@@ -210,7 +210,7 @@ use std::ops::{Deref, DerefMut};
 impl<T> Deref for Guard<'_, T> {
     type Target = T;
     fn deref(&self) -> &T {
-        // 安全的：Guard 的 存在
+        // 安全性：Guard 的 存在
         // 保证了我们已经独占地锁定这个锁
         unsafe { &*self.lock.value.get() }
     }
@@ -218,7 +218,7 @@ impl<T> Deref for Guard<'_, T> {
 
 impl<T> DerefMut for Guard<'_, T> {
     fn deref_mut(&mut self) -> &mut T {
-        // 安全的：Guard 的存在
+        // 安全性：Guard 的存在
         // 保证了我们已经独占地锁定这个锁
         unsafe { &mut *self.lock.value.get() }
     }

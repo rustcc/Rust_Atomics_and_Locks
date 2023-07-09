@@ -418,7 +418,7 @@ impl AtomicI32 {
 ```rust
 impl AtomicI32 {
     pub fn compare_exchange(&self, expected: i32, new: i32) -> Result<i32, i32> {
-        // 在视线中，加载、比较以及存储操作，
+        // 在实际中，加载、比较以及存储操作，
         // 这些所有都是以单个原子操作发生的。
         let v = self.load();
         if v == expected {

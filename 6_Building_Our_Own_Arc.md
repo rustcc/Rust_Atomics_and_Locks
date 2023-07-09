@@ -1,6 +1,6 @@
 # 第六章：构建我们自己的“Arc”
 
-在[第一章“引用计数”](./1_Basic_of_Rust_Concurrency.md#引用计数)中，我们了解了 `std::sync::Arc<T>` 类型允许通过引用计数共享所有权。`Arc::new` 函数创建一个新分配的内存，就像 `Box::new`。然而，与 Box 不同的是，克隆 Arc 将共享原始分配的内存，而不是创建一个新的。只有当 Arc 和所有其他的克隆被丢弃，共享分配的内存才会被丢弃。
+在[第一章“引用计数”](./1_Basic_of_Rust_Concurrency.md#引用计数)中，我们了解了 `std::sync::Arc<T>` 类型允许通过引用计数共享所有权。`Arc::new` 函数创建一个新的内存分配，就像 `Box::new`。然而，与 Box 不同的是，克隆 Arc 将共享原始的内存分配，而不是创建一个新的。只有当 Arc 和所有其他的克隆被丢弃，共享的内存分配才会被丢弃。
 
 这种类型的实现所涉及的内存排序可能是非常有趣的。在本章中，我们将通过实现我们自己的 `Arc<T>` 将更多理论付诸实践。我们将开始一个基础的版本，然后将其扩展到支持循环结构的 *weak 指针*，并且最终将其优化为一个与标准库差不多的实现结束本章。
 
@@ -19,9 +19,9 @@ struct ArcData<T> {
 
 接下来是 `Arc<T>` 结构体本身，它实际上仅是一个指向（共享的）`ArcData<T>` 的指针。
 
-使用 `Box<ArcDate<T>>` 作为包装器，并使用标准的 Box 来处理 `ArcData<T>` 分配的内存可能很诱人。然而，Box 表示独占所有权，并不是共享所有权。我们不能使用引用，因为我们不仅要借用其他所有权的数据，并且它的生命周期（“直到此 Arc 的最后一个克隆被丢弃”）无法直接表示为 Rust 的生命周期。
+使用 `Box<ArcDate<T>>` 作为包装器，并使用标准的 Box 来处理 `ArcData<T>` 的内存分配可能很诱人。然而，Box 表示独占所有权，并不是共享所有权。我们不能使用引用，因为我们不仅要借用其他所有权的数据，并且它的生命周期（“直到此 Arc 的最后一个克隆被丢弃”）无法直接表示为 Rust 的生命周期。
 
-相反，我们将不得不使用指针，并手动处理分配内存以及所有权的概念。我们将使用 `std::ptr::NonNull<T>`，而不是 `*mut T` 或 `*const T`，它表示一个永远不会为空的指向 T 的指针。这样，使用 None 的空指针表示 `Option<Arc<T>>` 与 `Arc<T>` 的大小相同。
+相反，我们将不得不使用指针，并手动处理内存分配以及所有权的概念。我们将使用 `std::ptr::NonNull<T>`，而不是 `*mut T` 或 `*const T`，它表示一个永远不会为空的指向 T 的指针。这样，使用 None 的空指针表示 `Option<Arc<T>>` 与 `Arc<T>` 的大小相同。
 
 ```rust
 use std::ptr::NonNull;
@@ -40,7 +40,7 @@ unsafe impl<T: Send + Sync> Send for Arc<T> {}
 unsafe impl<T: Send + Sync> Sync for Arc<T> {}
 ```
 
-对于 `Arc<T>::new`，我们必须使用引用计数为 1 的 `ArcData<T>` 创建一个新分配的内存。我们将使用 `Box::new` 创建新分配的内存，使用 `Box::leak` 放弃我们对此分配内存的独占所有权，以及使用 `NonNull::from` 将其转换为指针：
+对于 `Arc<T>::new`，我们必须使用引用计数为 1 的 `ArcData<T>` 创建一个新的内存分配。我们将使用 `Box::new` 创建新的内存分配，使用 `Box::leak` 放弃我们对此内存分配的独占所有权，以及使用 `NonNull::from` 将其转换为指针：
 
 ```rust
 impl<T> Arc<T> {
@@ -210,7 +210,7 @@ fn test() {
     pub fn get_mut(arc: &mut Self) -> Option<&mut T> {
         if arc.data().ref_count.load(Relaxed) == 1 {
             fence(Acquire);
-            // 安全的：没有任何其他东西可以访问 data，因为
+            // 安全性：没有任何其他东西可以访问 data，因为
             // 只有一个 Arc，我们拥有独占访问的权限。
             unsafe { Some(&mut arc.ptr.as_mut().data) }
         } else {
@@ -223,19 +223,19 @@ fn test() {
 
 返回的可以引用会隐式地从参数重借用生命周期，这意味着只要返回 `&mut T` 仍然存在，原始的 Arc 就不能被其他代码使用，从而允许安全的可变性操作。
 
-当 `&mut T` 的生命周期过期后，Arc 可以在此被使用以及与其他线程共享。也许有人可能会想知道，在之后访问数据的线程是否需要关注内存顺序。然而，这是用于与其他线程共享 Arc（或着新克隆）的机制负责的。（例如 mutex、channel 或者产生的新线程。）
+当 `&mut T` 的生命周期过期后，Arc 可以在此被使用以及与其他线程共享。也许有人可能会想知道，在之后访问数据的线程是否需要关注内存排序。然而，这是用于与其他线程共享 Arc（或着新克隆）的机制负责的。（例如 mutex、channel 或者产生的新线程。）
 
 ## Weak 指针
 
-当表示在内存中多个对象组成的结构时，引用计数非常有用。例如，在数结构中的每个节点可以包含一个 Arc 指向它的孩子节点。这样，当我们丢弃一个节点时，不再使用的孩子节点也会被（递归地）丢弃。
+当表示在内存中多个对象组成的结构时，引用计数非常有用。例如，在树结构中的每个节点可以包含对其子节点的 Arc 引用。这样，当我们丢弃一个节点时，不再使用的孩子节点也会被（递归地）丢弃。
 
-然而，对于*循环结构*来说，这会失效。如果一个孩子节点也包含一个 Arc 指向它的父节点，那么当所有 Arc 引用都不存在时，两者都不会被丢弃，因为始终存在至少一个引用它们的 Arc。
+然而，对于*循环结构*来说，这会失效。如果一个子节点也包含对它父节点的 Arc 引用，那么当所有 Arc 引用都不存在时，两者都不会被丢弃，因为始终存至少有一个 Arc 引用仍然指向它们。
 
 标准库的 Arc 提供了解决这个问题的办法：`Weak<T>`。`Weak<T>`（也被称为 *weak 指针*），行为有点像 `Arc<T>`，但是并不会阻止对象被丢弃。T 可以在多个 `Arc<T>` 和 `Weak<T>` 对象之间共享，但是当所有 `Arc<T>` 对象都消失时，不管是否还有 `Weak<T>` 对象，T 都会被丢弃。
 
 着意味着 `Weak<T>` 可以没有 T 而存在，因此无法像 Arc 那样无条件地提供 `&T`。然而，为了获取给定 `Weak<T>` 中的 T，可以通过 `Arc<T>` 的 `upgrade()` 方法来升级。这个方法返回一个 `Option<Arc<T>>`，如果 T 已经被丢弃，则返回 None。
 
-在基于 Arc 的结构中，可以使用 Weak 打破循环引用。例如，在树结构中的孩子节点使用 Weak，而不是使用 Arc 来指向它们的福节点。然后，尽管子节点存在，也不会阻止父节点的 `drop` 操作。
+在基于 Arc 的结构中，可以使用 Weak 打破循环引用。例如，在树结构中的子节点使用 Weak，而不是使用 Arc 来引用它们的父节点。然后，尽管子节点存在，也不会阻止父节点被丢弃。
 
 让我们来实现这个功能。
 
@@ -291,7 +291,7 @@ impl<T> Arc<T> {
 }
 ```
 
-就像之前一样吗，我们假设 ptr 字段总是指向邮箱的 `ArcData<T>`。这一次，我们将在 `Weak<T>` 上将该假设编码为私有 `data()` 辅助方法：
+就像之前一样，我们假设 ptr 字段总是指向有效的 `ArcData<T>`。这一次，我们将在 `Weak<T>` 上将该假设编码为私有 `data()` 辅助方法：
 
 ```rust
 impl<T> Weak<T> {
@@ -311,7 +311,7 @@ impl<T> Deref for Arc<T> {
 
     fn deref(&self) -> &T {
         let ptr = self.weak.data().data.get();
-        // 安全的：由于 Arc 包装 data，
+        // 安全性：由于 Arc 包装 data，
         // data 存在并可以共享。
         unsafe { (*ptr).as_ref().unwrap() }
     }
@@ -368,7 +368,7 @@ impl<T> Drop for Arc<T> {
         if self.weak.data().data_ref_count.fetch_sub(1, Release) == 1 {
             fence(Acquire);
             let ptr = self.weak.data().data.get();
-            // 安全的：data 引用计数是 0，
+            // 安全性：data 引用计数是 0，
             // 因此没有任何东西可以访问它。
             unsafe {
                 (*ptr) = None;
@@ -389,7 +389,7 @@ impl<T> Arc<T> {
     pub fn get_mut(arc: &mut Self) -> Option<&mut T> {
         if arc.weak.data().alloc_ref_count.load(Relaxed) == 1 {
             fence(Acquire);
-            // 安全的：没有任何东西可以访问 data，因为
+            // 安全性：没有任何东西可以访问 data，因为
             // 仅有一个 Arc，并且我们拥有独占访问权限，
             // 也没有 Weak 指针
             let arcdata = unsafe { arc.weak.ptr.as_mut() };
@@ -519,7 +519,7 @@ fn annoying(mut arc: Arc<Something>) {
 
 让我们尝试它。
 
-这次，我们不能简单地将 `Arc<T>` 实现为对 `Weak<T>` 的包装，所以两者都将包装一个非空指针指向分配的内存：
+这次，我们不能简单地将 `Arc<T>` 实现为对 `Weak<T>` 的包装，所以两者都将包装一个非空指针到内存分配中：
 
 ```rust
 pub struct Arc<T> {
@@ -587,7 +587,7 @@ impl<T> Deref for Arc<T> {
     type Target = T;
 
     fn deref(&self) -> &T {
-        // 安全的：因为有一个 Arc 包裹 data，
+        // 安全性：因为有一个 Arc 包裹 data，
         // data 存在不能呗共享。
         unsafe { &*self.data().data.get() }
     }
@@ -646,7 +646,7 @@ impl<T> Drop for Arc<T> {
     fn drop(&mut self) {
         if self.data().data_ref_count.fetch_sub(1, Release) == 1 {
             fence(Acquire);
-            // 安全的：data 引用计数是 0，
+            // 安全性：data 引用计数是 0，
             // 所以没有东西再访问 data。
             unsafe {
                 ManuallyDrop::drop(&mut *self.data().data.get());
@@ -659,7 +659,7 @@ impl<T> Drop for Arc<T> {
 }
 ```
 
-`Weak<T>` 上的 upgrade 方法基本保持不变，只是不再克隆 weak 指针，因为它不再需要递增 weak 计数器。升级仅在至少有一个 `Arc<T>` 指向分配内存的情况下成功，这意味着 Arc 对象已经在 weak 计数器中进行了计算。
+`Weak<T>` 上的 upgrade 方法基本保持不变，只是不再克隆 weak 指针，因为它不再需要递增 weak 计数器。仅当内存分配中至少有一个 `Arc<T>` 才会成功，这意味着 Arc 对象已经计入了 weak 计数器。
 
 ```rust
 impl<T> Weak<T> {
@@ -696,7 +696,7 @@ impl<T> Weak<T> {
 
 因此，在 `get_mut` 方法中，我们首先需要检查 `alloc_ref_count` 是否为 1，并在确实为 1 的情况下将其替换为 `usize::MAX`。这是 compare_exchange 的任务。
 
-然后，我们需要检查其他计数器是否也为 1，之后我们可以立即解锁弱 weak 指针计数器。如果第二个计数器也为 1，我们就知道我们对分配的内存和数据拥有独占访问权，可以返回一个 `&mut T`。
+然后，我们需要检查其他计数器是否也为 1，之后我们可以立即解锁弱 weak 指针计数器。如果第二个计数器也为 1，我们就能知道我们有独占访问内存分配和数据的权限，可以返回一个 `&mut T`。
 
 ```rust
     pub fn get_mut(arc: &mut Self) -> Option<&mut T> {
@@ -772,7 +772,7 @@ impl<T> Weak<T> {
 * 通过检查引用计数是否确实是一个 `Arc<T>`，可以有条件地提供独占访问（`&mut T`）。
 * 递增原子引用计数可以使用 relaxed 操作，但是最终的递减必须与之前的递减同步。
 * *weak 指针*（`Weak<T>`）可以用于避免循环。
-* `NonNull<T>` 类型表示一个指向 T 的指针，但是从不是空。
+* `NonNull<T>` 类型表示一个指向 T 的指针，但是从不为空。
 * `ManuallyDrop<T>` 类型可以用于使用不安全代码时，手动决定何时丢弃 T。
 * 一旦涉及一个以上的原子变量，事情就会变得更加复杂。
 * 实现特定的（自旋）锁有时可能是同时对多个原子变量进行操作的有效策略。

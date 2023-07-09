@@ -90,7 +90,7 @@ pub struct Mutex {
 
 因为用户可能总是移动任何它们拥有的 mutex 对象到其他地方，我们要买需要承诺它别这么做，要买使接口不安全；或者我们需要取走所有权并且隐藏所有内容到一个包装类型后面（可以使用 `std::pin::Pin` 来完成）。这些都不是最好的解决方案，因为它们会影响我们的 mutex 类型的接口，使其用起来容易出错和/或不方便使用。
 
-一个可以的解决方案是将 mutex 包装在一个 Box 中。通过将 pthread 的 mutex 放在它的自己分配的内存中，即使所有者被移动，它仍然在内存中的相同位置。
+一个可以的解决方案是将 mutex 包装在一个 Box 中。通过将 pthread 的 mutex 放在它自己的内存分配中，即使所有者被移动，它仍然在内存中的相同位置。
 
 ```rust
 pub struct Mutex {
@@ -100,7 +100,7 @@ pub struct Mutex {
 
 > 这就是 `std::sync::Mutex` 在 Rust 1.62 之前在所有 Unix 平台上实现的方式。
 
-这个方式的缺点就是开销大：每个 mutex 都有自己分配的内存，为创建、销毁以及使用 mutex **增加**了显著的开销。另一个缺点是它阻止了 new 函数编译时执行（`const`），这妨碍了拥有静态 mutex 的方式。
+这个方式的缺点就是开销大：每个 mutex 都有自己的内存分配，为创建、销毁以及使用 mutex **增加**了显著的开销。另一个缺点是它阻止了 new 函数编译时执行（`const`），这妨碍了拥有静态 mutex 的方式。
 
 即使 `pthread_mutex_t` 是可移动的，`const fn new` 也可能仅使用默认设置来初始化，这导致了当递归锁定时的未定义行为。没有办法设计一个安全的接口来防止递归锁定，因此这意味着我们要使用 unsafe 标记锁定函数，以使用户承诺他们不会这样做。
 
@@ -374,7 +374,7 @@ Winodows 中的 `CRITICAL_SECTION` 实际上是一个递归互斥锁，只是它
 
 CRITICAL_SECTION 使用 `InitializeCriticalSection()` 函数来初始化，使用 `DeleteCriticalSection()` 函数来销毁，并且不能被移动。通过 `EnterCriticalSection()` 或者 `TryEnterCriticalSection()` 来锁定，并且使用 `LeaveCriticalSection()` 解锁。
 
-> 在 Rust 1.51 之前，Windows XP 上的 `std::sync::Mutex` 基于（Box 内存分配）CRITICAL_SECTION 对象。（Rust 1.51 放弃了对 Windows XP 的支持。）
+> 在 Rust 1.51 之前，Windows XP 上的 `std::sync::Mutex` 基于（Box 的内存分配）CRITICAL_SECTION 对象。（Rust 1.51 放弃了对 Windows XP 的支持。）
 
 #### 精简的读写（SRW）锁[^5]
 
@@ -392,7 +392,7 @@ SRW 锁与条件变量一起引入了 Windows API。`CONDITION_VARIABLE` 仅占�
 
 唤醒等待线程要么通过 WakeConditionVariable 唤醒单个线程，要么通过 WakeAllConditionVariable 唤醒所有等待线程。
 
-> 最初，标准库中使用的 Windows SRW 锁和条件变量被包装在 Box 中，以避免移动对象。直到我们在 2020 年要求之后，微软才记录了这些对象的可移动性保证。自 Rust 1.49 起，`std::sync::Mutex`、`std::sync::RwLock` 和 `std::sync::Condvar` 在 Windows Vista 及更高版本中直接封装了 SRWLOCK 或 CONDITION_VARIABLE，而无需进行任何内存的分配。
+> 最初，标准库中使用的 Windows SRW 锁和条件变量被包装在 Box 中，以避免移动对象。直到我们在 2020 年要求之后，微软才记录了这些对象的可移动性保证。自 Rust 1.49 起，`std::sync::Mutex`、`std::sync::RwLock` 和 `std::sync::Condvar` 在 Windows Vista 及更高版本中直接封装了 SRWLOCK 或 CONDITION_VARIABLE，无需任何额外的内存分配。
 
 ### 基于地址的等待
 
