@@ -1,6 +1,6 @@
 # 第十章：主意和灵感
 
-（[英文版本](https://marabos.nl/atomics/inspiration.html)）
+（<a href="https://marabos.nl/atomics/inspiration.html" targt="_blank">英文版本</a>）
 
 有无数与并发相关的话题、算法、数据结构、轶事以及其它可能的章节都可能成为本书的一部分。然而，我们已经到了最后一章，我们即将结束我们的旅程，希望给你全新的可能性并对这些可能性感到兴奋，并准备在实践中应用新的知识和技能。
 
@@ -8,7 +8,7 @@
 
 ## 信号量[^1]
 
-（[英文版本](https://marabos.nl/atomics/inspiration.html#semaphore)）
+（<a href="https://marabos.nl/atomics/inspiration.html#semaphore" targt="_blank">英文版本</a>）
 
 *信号量*实际上仅是有两个操作的计数器：*信号*（signal，也叫做 up 或 V）和*等待*（wait，也叫做 down 或 P）。signal 操作增加计数器到一个确定的最大值，而 wait 操作递减计数器的值。如果计数器是 0，wait 操作将阻塞并等待匹配的 signal 操作，以防止计数器将变成负数。这是一个灵活的工具，可以用于实现其它同步原语。
 
@@ -27,7 +27,7 @@
 
 ## RCU
 
-（[英文版本](https://marabos.nl/atomics/inspiration.html#rcu)）
+（<a href="https://marabos.nl/atomics/inspiration.html#rcu" targt="_blank">英文版本</a>）
 
 如果你想要多个线程去（更多地）读和（少量地）更改一些数据，你可以使用 RwLock。当这些数据仅是单个整数时，你可以使用单个原子变量（例如 `AtomicU32`）去避免锁定，这样更有效。然而，对于巨大数据的分块，像有着很多字段的结构体，没有可用的原子类型允许对整个对象进行无锁原子操作。
 
@@ -50,7 +50,7 @@
 
 ## 无锁链表
 
-（[英文版本](https://marabos.nl/atomics/inspiration.html#lock-free-linked-list)）
+（<a href="https://marabos.nl/atomics/inspiration.html#lock-free-linked-list" targt="_blank">英文版本</a>）
 
 扩展基本的 RCU 模式，你可以**增加**一个原子指针到结构体以指向下一个，以将其转换为*链表*。这允许线程以原子地方式**增加**或移除链表中的元素，而无需每次更新时复制整张表。
 
@@ -73,7 +73,7 @@
 
 ## 基于队列的锁
 
-（[英文版本](https://marabos.nl/atomics/inspiration.html#queue-based-locks)）
+（<a href="https://marabos.nl/atomics/inspiration.html#queue-based-locks" targt="_blank">英文版本</a>）
 
 对于大多数标准锁定的原语，操作系统内核都会跟踪被阻塞的线程，并负责在被询问时，挑选一个线程来唤醒。一个有趣的替代方案是通过手动地跟踪等待线程的队列来实现 mutex（或者其他锁定原语）。
 
@@ -96,7 +96,7 @@ Windows SRW 锁（[第8章中的“一个轻巧的读写锁”](./8_Operating_Sy
 
 ## 基于阻塞的锁
 
-（[英文版本](https://marabos.nl/atomics/inspiration.html#parking-lotbased-locks)）
+（<a href="https://marabos.nl/atomics/inspiration.html#parking-lotbased-locks" targt="_blank">英文版本</a>）
 
 为了创建一个尽可能小的高效 mutex，你可以通过将队列移动到全局的数据结构，在 mutex 自身只留下 1 或者 2 个位，来构建基于队列的锁的想法。这样，mutex 仅需要是一个字节。你甚至可以把它放置在一些未使用的指针位中，这允许非常细粒度的锁定，几乎没有其他额外的开销。
 
@@ -115,7 +115,7 @@ Windows SRW 锁（[第8章中的“一个轻巧的读写锁”](./8_Operating_Sy
 
 ## 顺序锁（SpinLock）
 
-（[英文版本](https://marabos.nl/atomics/inspiration.html#sequence-lock)）
+（<a href="https://marabos.nl/atomics/inspiration.html#sequence-lock" targt="_blank">英文版本</a>）
 
 顺序锁是不使用传统（阻塞）锁的原子更新（巨大）的数据的另一种解决方案。当数据正在更新时，甚至数据正在准备读取时，它使用一个奇数的原子计数器。
 
@@ -131,7 +131,7 @@ Windows SRW 锁（[第8章中的“一个轻巧的读写锁”](./8_Operating_Sy
 
 ## 教学材料
 
-（[英文版本](https://marabos.nl/atomics/inspiration.html#teaching-materials)）
+（<a href="https://marabos.nl/atomics/inspiration.html#teaching-materials" targt="_blank">英文版本</a>）
 
 花费许多时间（或者许多年）去发明新的并发数据结构和设计人性化的 Rust 实现是非常有趣的。如果你正在寻找与 Rust、原子操作、锁、并发数据结构以及并发性相关的其他知识，那么创建新的教材与其他人分享你的知识也非常有成就感。
 

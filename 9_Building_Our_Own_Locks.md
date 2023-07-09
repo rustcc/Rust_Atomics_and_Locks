@@ -1,6 +1,6 @@
 # 第九章：构建我们自己的「锁」
 
-（[英文版本](https://marabos.nl/atomics/building-locks.html)）
+（<a href="https://marabos.nl/atomics/building-locks.html" targt="_blank">英文版本</a>）
 
 在该章节，我们将建造属于我们自己的互斥锁（`mutex`）[^3]、条件变量（`condition variable`）[^4]以及读写锁（`reader-writer lock`）[^5]。对于它们中的任何一个，我们都会从一个非常基础的版本开始，然后扩展它以使其更高效。
 
@@ -40,7 +40,7 @@
 
 ## Mutex
 
-（[英文版本](https://marabos.nl/atomics/building-locks.html#mutex)）
+（<a href="https://marabos.nl/atomics/building-locks.html#mutex" targt="_blank">英文版本</a>）
 
 在构建 `Mutex<T>` 时，我们将接收来自[第四章](./4_Building_Our_Own_Spin_Lock.md)的 `SpinLock<T>` 类型。在不涉及阻塞的部分，例如守护类型的设计，将保持不变。
 
@@ -149,7 +149,7 @@ impl<T> Drop for MutexGuard<'_, T> {
 
 ### 避免系统调用
 
-（[英文版本](https://marabos.nl/atomics/building-locks.html#mutex-avoid-syscalls)）
+（<a href="https://marabos.nl/atomics/building-locks.html#mutex-avoid-syscalls" targt="_blank">英文版本</a>）
 
 到目前为止，我们 mutex 中最慢的部分是等待和唤醒，因为这（可能）导致一个*系统调用*，即对操作系统内核的调用。像这样与内核交互是一个相当复杂的过程，往往相当缓慢，尤其是与原子操作比较。因此，对于一个高性能 mutex 的实现，我们应该尽可能尝试去避免等待和唤醒调用。
 
@@ -207,7 +207,7 @@ impl<T> Drop for MutexGuard<'_, T> {
 
 ### 进一步优化
 
-（[英文版本](https://marabos.nl/atomics/building-locks.html#optimizing-further)）
+（<a href="https://marabos.nl/atomics/building-locks.html#optimizing-further" targt="_blank">英文版本</a>）
 
 在这一点上，我们似乎没有什么可以进一步优化的了。在未考虑的情况下，我们执行零系统调用，并且剩下的只是两个非常简单的原子操作。
 
@@ -280,7 +280,7 @@ fn lock_contended(state: &AtomicU32) {
 
 ### 基准测试
 
-（[英文版本](https://marabos.nl/atomics/building-locks.html#benchmarking)）
+（<a href="https://marabos.nl/atomics/building-locks.html#benchmarking" targt="_blank">英文版本</a>）
 
 测试 mutex 实现的性能是很难的。写基准测试和得到一些数字很容易，但是很难去得到一些有意义的数字。
 
@@ -344,7 +344,7 @@ fn main() {
 
 ## 条件变量
 
-（[英文版本](https://marabos.nl/atomics/building-locks.html#condition-variable)）
+（<a href="https://marabos.nl/atomics/building-locks.html#condition-variable" targt="_blank">英文版本</a>）
 
 让我们做一些更有趣的事情：实现一个条件变量。
 
@@ -473,7 +473,7 @@ fn test_condvar() {
 
 ### 避免系统调用2
 
-（[英文版本](https://marabos.nl/atomics/building-locks.html#avoiding-syscalls)）
+（<a href="https://marabos.nl/atomics/building-locks.html#avoiding-syscalls" targt="_blank">英文版本</a>）
 
 正如我们在[“Mutex：避免系统调用”](#避免系统调用)中的那样，优化一个锁定原语主要是避免不需要的等待和唤醒操作。
 
@@ -556,7 +556,7 @@ impl Condvar {
 
 ### 避免虚假唤醒
 
-（[英文版本](https://marabos.nl/atomics/building-locks.html#avoiding-spurious-wake-ups)）
+（<a href="https://marabos.nl/atomics/building-locks.html#avoiding-spurious-wake-ups" targt="_blank">英文版本</a>）
 
 另一个方式是通过避免虚假唤醒来优化我们的条件变量。每次线程被唤醒时，它将尝试锁定 mutex，这可能与其它线程产生竞争，这可能在性能上有一个巨大的影响。
 
@@ -603,7 +603,7 @@ impl Condvar {
 
 ## 读写锁
 
-（[英文版本](https://marabos.nl/atomics/building-locks.html#reader-writer-lock)）
+（<a href="https://marabos.nl/atomics/building-locks.html#reader-writer-lock" targt="_blank">英文版本</a>）
 
 是时候实现读写锁了。
 
@@ -761,7 +761,7 @@ impl<T> Drop for WriteGuard<'_, T> {
 
 ### 避免 writer 忙碌循环
 
-（[英文版本](https://marabos.nl/atomics/building-locks.html#avoiding-busy-looping-writers)）
+（<a href="https://marabos.nl/atomics/building-locks.html#avoiding-busy-looping-writers" targt="_blank">英文版本</a>）
 
 我们实现的一个问题是写锁可能导致意外地忙碌循环。
 
@@ -845,7 +845,7 @@ impl<T> Drop for WriteGuard<'_, T> {
 
 ### 避免 writer 陷入饥饿
 
-（[英文版本](https://marabos.nl/atomics/building-locks.html#avoiding-writer-starvation)）
+（<a href="https://marabos.nl/atomics/building-locks.html#avoiding-writer-starvation" targt="_blank">英文版本</a>）
 
 RwLock 的一个通常用例是频繁使用 reader 的情况，但是非常少，通常仅有一个，不经常的 writer 的情况。例如，一个线程可能负责读取一些传感器输入或者定期下载许多其它线程需要使用的新数据。
 
@@ -969,7 +969,7 @@ impl<T> Drop for WriteGuard<'_, T> {
 
 ## 总结
 
-（[英文版本](https://marabos.nl/atomics/building-locks.html#summary)）
+（<a href="https://marabos.nl/atomics/building-locks.html#summary" targt="_blank">英文版本</a>）
 
 * atomic-wait crate 提供了一个基础的类 futex 功能，适用于所有主要的操作系统（最新版本）。
 * 一个最小的实现仅需要两个状态，像我们来自[第四章](./4_Building_Our_Own_Spin_Lock.md)的 `SpinLock`。

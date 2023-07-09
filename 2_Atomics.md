@@ -1,6 +1,6 @@
 # 第二章：Atomic
 
-（[英文版本](https://marabos.nl/atomics/atomics.html)）
+（<a href="https://marabos.nl/atomics/atomics.html" targt="_blank">英文版本</a>）
 
 *原子*（atomic）这个单词来自于希腊语 `ἄτομος`，意味着不可分割的，不能被切割成更小的块。在计算机科学中，它被用于描述一个不可分割的操作：它要么完全完成，要么还没发生。
 
@@ -24,7 +24,7 @@
 
 ## Atomic 的加载和存储操作
 
-（[英文版本](https://marabos.nl/atomics/atomics.html#atomic-load-and-store-operations)）
+（<a href="https://marabos.nl/atomics/atomics.html#atomic-load-and-store-operations" targt="_blank">英文版本</a>）
 
 我们将查看的前两个原子操作是最基本的：load 和 store。它们的函数签名如下，使用 AtomicI32 作为示例：
 
@@ -41,7 +41,7 @@ load 方法以原子方式加载存储在原子变量中的值，并且 store �
 
 ### 示例：停止标识
 
-（[英文版本](https://marabos.nl/atomics/atomics.html#example-stop-flag)）
+（<a href="https://marabos.nl/atomics/atomics.html#example-stop-flag" targt="_blank">英文版本</a>）
 
 第一个示例使用 AtomicBool 作为*停止标识*。这个标识被用于告诉其它线程去停止运行：
 
@@ -84,7 +84,7 @@ fn main() {
 
 ### 示例：进度报道
 
-（[英文版本](https://marabos.nl/atomics/atomics.html#example-progress-reporting)）
+（<a href="https://marabos.nl/atomics/atomics.html#example-progress-reporting" targt="_blank">英文版本</a>）
 
 在我们的下一个示例中，我们通过后台线程逐步地处理 100 项，而主线程为用户提供定期地更新：
 
@@ -122,7 +122,7 @@ fn main() {
 
 #### 同步
 
-（[英文版本](https://marabos.nl/atomics/atomics.html#synchronization)）
+（<a href="https://marabos.nl/atomics/atomics.html#synchronization" targt="_blank">英文版本</a>）
 
 一旦最后一项处理完成，主线程可能需要整整一秒才知道，从而在最后引入不必要的延迟。为了解决这个，我们在每当有新的消息有用时，可以使用阻塞（[第一章“线程阻塞”](./1_Basic_of_Rust_Concurrency.md#线程阻塞)）去唤醒睡眠中的主线程。
 
@@ -163,7 +163,7 @@ fn main() {
 
 ### 示例：惰性初始化
 
-（[英文版本](https://marabos.nl/atomics/atomics.html#example-lazy-init)）
+（<a href="https://marabos.nl/atomics/atomics.html#example-lazy-init" targt="_blank">英文版本</a>）
 
 在移动到更高级的原子操作之前，最后一个示例是关于*惰性初始化*。
 
@@ -197,7 +197,7 @@ fn get_x() -> u64 {
 
 ## 获取并修改操作
 
-（[英文版本](https://marabos.nl/atomics/atomics.html#fetch-and-modify-operations)）
+（<a href="https://marabos.nl/atomics/atomics.html#fetch-and-modify-operations" targt="_blank">英文版本</a>）
 
 注意，我们已经看见基础 load 和 store 操作的一些用例，让我们继续更有趣的操作：*获取并修改*（fetch-and-modify）操作。这些操作修改原子变量，但也加载（获取）原始值，作为一个单原子操作。
 
@@ -246,7 +246,7 @@ fetch_add 操作从 100 递增到 123，但是返回给我们还是旧值 100。
 
 ### 示例：来自多线程的进度报道
 
-（[英文版本](https://marabos.nl/atomics/atomics.html#example-progress-reporting-from-multiple-threads)）
+（<a href="https://marabos.nl/atomics/atomics.html#example-progress-reporting-from-multiple-threads" targt="_blank">英文版本</a>）
 
 在[“示例：进度报道”](#示例进度报道)中，我们使用一个 AtomicUsize 去报道后台线程的进度。如果我们把工作分开，例如，四个线程，每个处理 25 个项目，我们将需要知道所有 4 个线程的进度。
 
@@ -292,7 +292,7 @@ fn main() {
 
 ### 示例：统计数据
 
-（[英文版本](https://marabos.nl/atomics/atomics.html#example-statistics)）
+（<a href="https://marabos.nl/atomics/atomics.html#example-statistics" targt="_blank">英文版本</a>）
 
 继续通过原子报道其他线程正在做什么的概念，让我们拓展我们的示例，也可以收集和报道一些关于处理项目所花费时间的统计数据。
 
@@ -354,7 +354,7 @@ fn main() {
 
 ### 示例：ID 分配
 
-（[英文版本](https://marabos.nl/atomics/atomics.html#example-id-allocation)）
+（<a href="https://marabos.nl/atomics/atomics.html#example-id-allocation" targt="_blank">英文版本</a>）
 
 让我们转到一个用例，我们实际上需要 `fetch_add` 的返回值。
 
@@ -417,7 +417,7 @@ fn allocate_new_id() -> u32 {
 
 ## 比较并交换操作
 
-（[英文版本](https://marabos.nl/atomics/atomics.html#cas)）
+（<a href="https://marabos.nl/atomics/atomics.html#cas" targt="_blank">英文版本</a>）
 
 更加高级和灵活的原子操作是*比较并交换*操作。这个操作检查是否原子值等同于给定的值，只有在这种情况下，它才以原子地方式使用新值替换它，作为单个操作完成。它会返回先前的值，并告诉我们是否进行了替换。
 
@@ -486,7 +486,7 @@ fn increment(a: &AtomicU32) {
 
 ### 示例：没有溢出的 ID 分配
 
-（[英文版本](https://marabos.nl/atomics/atomics.html#example-handle-overflow)）
+（<a href="https://marabos.nl/atomics/atomics.html#example-handle-overflow" targt="_blank">英文版本</a>）
 
 现在，从[“示例：ID 分配”](#示例id-分配)中回到 `allocate_new_id()` 的溢出问题。
 
@@ -525,7 +525,7 @@ fn allocate_new_id() -> u32 {
 
 ### 示例：惰性一次性初始化
 
-（[英文版本](https://marabos.nl/atomics/atomics.html#example-racy-init)）
+（<a href="https://marabos.nl/atomics/atomics.html#example-racy-init" targt="_blank">英文版本</a>）
 
 在[“示例：惰性初始化”](#示例惰性初始化)中，我们查看常量值的惰性初始化示例。我们做了一个函数，在第一次调用时懒惰地初始化一个值，但在以后的调用中重用它。当多个线程并发地运行这个函数，多个线程可能执行初始化，并且它们将以不可预期的顺序覆盖彼此的结果。
 
@@ -562,7 +562,7 @@ fn get_key() -> u64 {
 
 ## 总结
 
-（[英文版本](https://marabos.nl/atomics/atomics.html#summary)）
+（<a href="https://marabos.nl/atomics/atomics.html#summary" targt="_blank">英文版本</a>）
 
 * 原子操作是不可分割的；它们要么完整的完成，要么它们还没有发生。
 * 在 Rust 中的原子操作是通过 `std::sync::atomic` 原子类型完成的，例如 `AtomicI32`。
