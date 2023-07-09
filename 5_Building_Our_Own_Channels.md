@@ -61,7 +61,7 @@ impl<T> Channel<T> {
 
 channel 的各种用例几乎是无止尽的。然而，在本章的剩余部分，我们将专注于一种特定类型的用例：恰好从一个线程向另一个线程发送一条消息。为此类用例设计的 channel 通常被称为 *一次性*（one-shot）channel。
 
-我们接收上述基于 `Mutex<VecDeque>` 的实现，并且将 `VecDeque` 替换为 `Option`，从而将队列的容量减小到恰好一个消息。这样可以避免内存分配，但是仍然会有使用 Mutex 的一些缺点。我们可以通过使用原子操作从头构建我们自己的一次性 channel 来避免这个问题。
+我们采用上述基于 `Mutex<VecDeque>` 的实现，并且将 `VecDeque` 替换为 `Option`，从而将队列的容量减小到恰好一个消息。这样可以避免内存，但是仍然会有使用 Mutex 的一些缺点。我们可以通过使用原子操作从头构建我们自己的一次性 channel 来避免这个问题。
 
 首先，让我们构建一个最小化的一次性 channel 实现，不需要考虑它的接口。在本章的稍后，我们将探索如何改进其接口以及如何与 Rust 类型相结合，为 channel 的用于提供愉快的体验。
 
@@ -104,7 +104,7 @@ impl<T> Channel<T> {
 要发送消息，它首先需要存储在 cell 中，之后我们可以通过将 ready 标识设置为 true 来将其释放给接收者。试图做这个超过一次是危险的，因为设置 ready 标识后，接收者可能在任意时刻读取消息，这可能会与第二次发送消息产生数据竞争。目前，我们通过使方法不安全并为它们留下备注，将此作为用户的责任：
 
 ```rust
-    /// 安全的：仅能调用一次！
+    /// 安全性：仅能调用一次！
     pub unsafe fn send(&self, message: T) {
         (*self.message.get()).write(message);
         self.ready.store(true, Release);
@@ -124,7 +124,7 @@ impl<T> Channel<T> {
         self.ready.load(Acquire)
     }
 
-    /// 安全的：仅能调用一次，
+    /// 安全性：仅能调用一次，
     /// 并且仅在 is_ready() 返回 true 之后调用！
     pub unsafe fn receive(&self) -> T {
         (*self.message.get()).assume_init_read()
@@ -374,7 +374,7 @@ impl<T> Receiver<T> {
 
 为了实现这一点，我们需要为我们的 UnsafeCell 和 AtomicBool 找到一个位置。之前，我们仅有一个具有这些字段的结构体，但是现在我们有两个单独的结构体，每个结构体都可能存在更长的时间。
 
-因为 sender 和 receiver 将需要共享这些变量的所有权，我们将使用 Arc（[第一章“引用计数”](./1_Basic_of_Rust_Concurrency.md#引用计数)）为我们提供引用计数的共享分配的内存，我们将在其中存储共享的 Channel 对象。正如以下展示的，Channel 类型不必是公共的，因为它的存在是与用户无关的细节。
+因为 sender 和 receiver 将需要共享这些变量的所有权，我们将使用 Arc（[第一章“引用计数”](./1_Basic_of_Rust_Concurrency.md#引用计数)）为我们提供引用计数共享内存分配，我们将在其中存储共享的 Channel 对象。正如以下展示的，Channel 类型不必是公共的，因为它的存在是与用户无关的细节。
 
 ```rust
 pub struct Sender<T> {
@@ -454,7 +454,7 @@ impl<T> Drop for Channel<T> {
 }
 ```
 
-当 `Sender<T>` 或者 `Receiver<T>` 被丢弃时，`Arc<Channel<T>>` 的 Drop 实现将递减对共享分配的内存的引用计数。当丢弃到第二个时，计数达到 0，并且 `Channel<T>` 自身被丢弃。这将调用我们上面的 Drop 实现，如果已发送但未收到消息，我们将丢弃该消息。
+当 `Sender<T>` 或者 `Receiver<T>` 被丢弃时，`Arc<Channel<T>>` 的 Drop 实现将递减对共享内存分配的引用计数。当丢弃到第二个时，计数达到 0，并且 `Channel<T>` 自身被丢弃。这将调用我们上面的 Drop 实现，如果已发送但未收到消息，我们将丢弃该消息。
 
 让我们尝试它：
 
@@ -505,9 +505,9 @@ note: this function takes ownership of the receiver `self`, which moves `sender`
 
 不得不在安全性、便利性、灵活性、简单性和性能之间进行权衡是不幸的，但有时是不可避免的。Rust通常致力于在这些方面取得最佳表现，但有时为了最大化某个方面的优势，我们需要在其中做出一些妥协。
 
-## 借用以避免分配内存
+## 借用以避免内存分配
 
-我们刚刚基于 Arc 的 channel 实现的设计可以非常方便的使用——代价是一些性能，因为它得分配内存。如果我们想要优化效率，我们可以通过用户对共享的 Channel 对象负责来获取一些性能。我们可以强制用户去创建一个通过可以由 Sender 和 Receiver 借用的 Channel，而不是在幕后处理 Channel 分配的内存和所有权。这样，它们可以选择简单地放置 Channel 在局部变量中，从而避免分配内存的开销。
+我们刚刚基于 Arc 的 channel 实现的设计可以非常方便的使用——代价是一些性能，因为它得内存分配。如果我们想要优化效率，我们可以通过用户对共享的 Channel 对象负责来获取一些性能。我们可以强制用户去创建一个通过可以由 Sender 和 Receiver 借用的 Channel，而不是在幕后处理 Channel 内存分配和所有权。这样，它们可以选择简单地放置 Channel 在局部变量中，从而避免内存分配的开销。
 
 我们将也在一定程度上牺牲简洁性，因为我们现在不得不处理借用和生命周期。
 
