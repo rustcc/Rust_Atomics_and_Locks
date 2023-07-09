@@ -1,6 +1,6 @@
 # 第五章：构建我们自己的 Channel
 
-（<a href="https://marabos.nl/atomics/building-channels.html" targt="_blank">英文版本</a>）
+（<a href="https://marabos.nl/atomics/building-channels.html" target="_blank">英文版本</a>）
 
 *Channel* 可以被用于在线程之间发送数据，并且它们有很多变体。一些 channel 仅能在一个发送者和一个接收者之间使用，而另一些可以在任意数量的线程之间发送，或者甚至允许多个接收者。一些 channel 是阻塞的，这意味着接收（有时也包括发送）是一个阻塞操作，这会使线程进入睡眠状态，知道你的操作完成。一些 channel 针对团兔粮进行优化，而另一些针对低延迟进行优化。
 
@@ -10,7 +10,7 @@
 
 ## 一个简单的以 mutex 为基础的 Channel
 
-（<a href="https://marabos.nl/atomics/building-channels.html#a-simple-mutex-based-channel" targt="_blank">英文版本</a>）
+（<a href="https://marabos.nl/atomics/building-channels.html#a-simple-mutex-based-channel" target="_blank">英文版本</a>）
 
 一个基础的 channel 实现并不需要任何关于原子的知识。我们可以接收 `VecDeque`，它根本上是一个 `Vec`，允许在两端高效的添加和移除元素，并使用 Mutex 保护它，以允许多个线程访问。然后，我们使用 `VecDeque` 作为已发送但尚未接受数据的消息队列。任何想要发送消息的线程只需要将其添加到队列的末尾，而任何想要接受消息的线程只需从队列的前端删除一个消息。
 
@@ -63,7 +63,7 @@ impl<T> Channel<T> {
 
 ## 一个不安全的一次性 Channel
 
-（<a href="https://marabos.nl/atomics/building-channels.html#an-unsafe-one-shot-channel" targt="_blank">英文版本</a>）
+（<a href="https://marabos.nl/atomics/building-channels.html#an-unsafe-one-shot-channel" target="_blank">英文版本</a>）
 
 channel 的各种用例几乎是无止尽的。然而，在本章的剩余部分，我们将专注于一种特定类型的用例：恰好从一个线程向另一个线程发送一条消息。为此类用例设计的 channel 通常被称为 *一次性*（one-shot）channel。
 
@@ -149,7 +149,7 @@ impl<T> Channel<T> {
 
 ## 通过运行时检查来达到安全
 
-（<a href="https://marabos.nl/atomics/building-channels.html#safety-through-runtime-checks" targt="_blank">英文版本</a>）
+（<a href="https://marabos.nl/atomics/building-channels.html#safety-through-runtime-checks" target="_blank">英文版本</a>）
 
 为了提供更安全的接口，我们可以增加一些检查，以确保误用会导致 panic 并显示清晰的错误信息，这比未定义行为要好得多。
 
@@ -352,7 +352,7 @@ impl&lt;T&gt; Drop for Channel&lt;T&gt; {
 
 ## 通过类型来达到安全
 
-（<a href="https://marabos.nl/atomics/building-channels.html#safety-through-types" targt="_blank">英文版本</a>）
+（<a href="https://marabos.nl/atomics/building-channels.html#safety-through-types" target="_blank">英文版本</a>）
 
 尽管我们已经成功地保护了我们 Channel 的用户免受未定义行为的问题，但是如果它们偶尔地不正确使用它，它们仍然有 panic 的风险。理想情况下，编译器将在程序运行之前检查正确的用法并指出滥用。
 
@@ -517,7 +517,7 @@ note: this function takes ownership of the receiver `self`, which moves `sender`
 
 ## 借用以避免内存分配
 
-（<a href="https://marabos.nl/atomics/building-channels.html#borrowing-to-avoid-allocation" targt="_blank">英文版本</a>）
+（<a href="https://marabos.nl/atomics/building-channels.html#borrowing-to-avoid-allocation" target="_blank">英文版本</a>）
 
 我们刚刚基于 Arc 的 channel 实现的设计可以非常方便的使用——代价是一些性能，因为它得内存分配。如果我们想要优化效率，我们可以通过用户对共享的 Channel 对象负责来获取一些性能。我们可以强制用户去创建一个通过可以由 Sender 和 Receiver 借用的 Channel，而不是在幕后处理 Channel 内存分配和所有权。这样，它们可以选择简单地放置 Channel 在局部变量中，从而避免内存分配的开销。
 
@@ -638,7 +638,7 @@ fn main() {
 
 ## 阻塞
 
-（<a href="https://marabos.nl/atomics/building-channels.html#blocking" targt="_blank">英文版本</a>）
+（<a href="https://marabos.nl/atomics/building-channels.html#blocking" target="_blank">英文版本</a>）
 
 让我们最终处理一下我们 Channel 最后留下的最大不便，阻塞接口的缺乏。我们测试一个新的 channel 变体，每次都使用线程阻塞函数。将这种模式本身整合到 channel 应该不是太难。
 
@@ -736,7 +736,7 @@ fn main() {
 
 ## 总结
 
-（<a href="https://marabos.nl/atomics/building-channels.html#summary" targt="_blank">英文版本</a>）
+（<a href="https://marabos.nl/atomics/building-channels.html#summary" target="_blank">英文版本</a>）
 
 * *channel* 用于在线程之间发送*消息*。
 * 一个简单、灵活但可能效率低下的 channel，只需一个 `Mutex` 和 `Condvar` 就很容易实现。

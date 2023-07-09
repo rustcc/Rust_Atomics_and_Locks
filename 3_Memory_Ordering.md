@@ -1,12 +1,12 @@
 # 第三章：内存排序[^1]
 
-（<a href="https://marabos.nl/atomics/memory-ordering.html" targt="_blank">英文版本</a>）
+（<a href="https://marabos.nl/atomics/memory-ordering.html" target="_blank">英文版本</a>）
 
 在[第二章](./2_Atomics.md)，我们简要地谈到了内存排序的概念。在该章节，我们将研究这个主题，并探索所有可用的内存排序选项，并且，更重要地是，我们将学习如何使用它们。
 
 ## 重排和优化
 
-（<a href="https://marabos.nl/atomics/memory-ordering.html#reordering-and-optimizations" targt="_blank">英文版本</a>）
+（<a href="https://marabos.nl/atomics/memory-ordering.html#reordering-and-optimizations" target="_blank">英文版本</a>）
 
 处理器和编译器执行各种技巧，以便使你的程序运行地尽可能地快。例如，处理器可能会确定你程序中的两个连续指令不会相互影响，并且如果这样更快，就会按顺序执行它们。当一个指令在从主存中获取一些数据被短暂地阻塞了，几个后续地指令可能在在第一个指令结束之前被执行和完成，只要这不会更改你程序的行为。类似地，编译器可能会决定重排或者重写你程序的部分代码，如果它有理由相信这可能会导致更快地执行。但是，同样地，仅有在不更改你程序行为的情况下。
 
@@ -62,7 +62,7 @@ let x = a.fetch_add(1,
 
 ## 内存模型
 
-（<a href="https://marabos.nl/atomics/memory-ordering.html#the-memory-model" targt="_blank">英文版本</a>）
+（<a href="https://marabos.nl/atomics/memory-ordering.html#the-memory-model" target="_blank">英文版本</a>）
 
 不同的内存排序选项有一个严格的形式定义，以确保我们确切地知道我们允许假设什么，并且让编译器编写者确切知道它们需要向我们提供什么。为了将它与特定处理器架构的细节解耦，内存排序是根据抽象*内存模型*定义的。
 
@@ -74,7 +74,7 @@ Rust 的内存模型，它更多的抄自 C++，与任何现有的处理器架�
 
 ## Happens-Before 关系
 
-（<a href="https://marabos.nl/atomics/memory-ordering.html#happens-before" targt="_blank">英文版本</a>）
+（<a href="https://marabos.nl/atomics/memory-ordering.html#happens-before" target="_blank">英文版本</a>）
 
 内存模型定义了操作在 *happens-before 关系*发生的顺序。这意味着，作为一个抽象模型，它不涉及机器指令、缓存、缓冲区、时间、指令重排、编译优化等，而只定一个了一件事情在另一件事情之前保证发生的情况，并将其它一切的顺序都视为未定义的。
 
@@ -115,7 +115,7 @@ fn b() {
 
 ### spawn 和 join
 
-（<a href="https://marabos.nl/atomics/memory-ordering.html#spawning-and-joining" targt="_blank">英文版本</a>）
+（<a href="https://marabos.nl/atomics/memory-ordering.html#spawning-and-joining" target="_blank">英文版本</a>）
 
 产生的线程会创建一个 happens-before 关系，它将发生在 `spawn()` 之前的事件与新线程关联起来。同样地，join 线程创建一个 happens-before 关系，它将发生在 `join()` 调用之后的事件与被 join 的线程关联起来。
 
@@ -145,7 +145,7 @@ fn f() {
 
 ## Relaxed 排序
 
-（<a href="https://marabos.nl/atomics/memory-ordering.html#relaxed" targt="_blank">英文版本</a>）
+（<a href="https://marabos.nl/atomics/memory-ordering.html#relaxed" target="_blank">英文版本</a>）
 
 当原子操作使用 relaxed 内存排序并不会提供任何 happens-before 关系，但是它们仍然保证了每个原子变量的*总的修改顺序*。这意味着，从线程的角度来看，*同一原子变量*的所有修改都是以相同的顺序进行的。
 
@@ -223,7 +223,7 @@ fn main() {
 
 ## Release 和 Acquire 排序
 
-（<a href="https://marabos.nl/atomics/memory-ordering.html#release-and-acquire-ordering" targt="_blank">英文版本</a>）
+（<a href="https://marabos.nl/atomics/memory-ordering.html#release-and-acquire-ordering" target="_blank">英文版本</a>）
 
 *Release* 和 *Acquire* 内存排序通常成对使用，它们用于形成线程之间的 happens-before 关系。`Release` 内存排序适用于 store 操作，而 `Acquire` 内存排序适用于 load 操作。
 
@@ -329,7 +329,7 @@ fn main() {
 
 ### 示例：锁定
 
-（<a href="https://marabos.nl/atomics/memory-ordering.html#example-locking" targt="_blank">英文版本</a>）
+（<a href="https://marabos.nl/atomics/memory-ordering.html#example-locking" target="_blank">英文版本</a>）
 
 互斥锁是 release 和 acquire 排序的最常见用例（参见[第一章的“锁：互斥锁和读写锁”](./1_Basic_of_Rust_Concurrency.md#锁互斥锁和读写锁)）。当锁定时，它们使用 acquire 排序的原子操作来检查是否它已解锁，同时也（原子地）改变状态到“锁定”。当解锁时，它们使用 release 排序设置状态到“解锁”。这意味着，在解锁 mutex 和随后锁定它有一个 happens-before 关系。
 
@@ -376,7 +376,7 @@ fn main() {
 
 ### 示例：使用间接的方式惰性初始化
 
-（<a href="https://marabos.nl/atomics/memory-ordering.html#example-lazy-initialization-with-indirection" targt="_blank">英文版本</a>）
+（<a href="https://marabos.nl/atomics/memory-ordering.html#example-lazy-initialization-with-indirection" target="_blank">英文版本</a>）
 
 在[第二章的“示例：惰性一次性初始化”](./2_Atomics.md#示例惰性一次性初始化)中，我们实现一个全局变量的惰性初始化，使用「比较且交换」操作去处理多个线程竞争同时初始化值的情况。由于该值是非零的 64 位整数，我们能够使用 AtomicU64 来存储它，在初始化之前使用零作为占位符。
 
@@ -432,7 +432,7 @@ fn get_data() -> &'static Data {
 
 ## Consume 排序
 
-（<a href="https://marabos.nl/atomics/memory-ordering.html#consume" targt="_blank">英文版本</a>）
+（<a href="https://marabos.nl/atomics/memory-ordering.html#consume" target="_blank">英文版本</a>）
 
 让我们仔细看看上一个示例中的内存排序。如果我们把严格的模型放在一边，从更实际的方面来思考它，我们可以说 release 排序阻止了数据的初始化与共享指针的 store 操作重新排序。这一点非常重要，因为否则其它线程可能会在数据完全初始化之前就能看到它。
 
@@ -456,7 +456,7 @@ consume 排序是 acquire 排序的一个轻量级、更高效的变体，其同
 
 ## 顺序一致性排序
 
-（<a href="https://marabos.nl/atomics/memory-ordering.html#seqcst" targt="_blank">英文版本</a>）
+（<a href="https://marabos.nl/atomics/memory-ordering.html#seqcst" target="_blank">英文版本</a>）
 
 一个更强的内存排序时*顺序一致性*排序：`Ordering::SeqCst`。它包含了 acquire 排序（对于 load 操作）以及 release 排序（对于 store 操作）的所有保证，并且*也*保证了全局一致性操作。
 
@@ -506,7 +506,7 @@ fn main() {
 
 ## 屏障（Fence）[^2]
 
-（<a href="https://marabos.nl/atomics/memory-ordering.html#fences" targt="_blank">英文版本</a>）
+（<a href="https://marabos.nl/atomics/memory-ordering.html#fences" target="_blank">英文版本</a>）
 
 除了对原子变量的额外操作，我们还可以将内存排序应用于：原子屏障。
 
@@ -652,7 +652,7 @@ fn main() {
 
 ## 常见的误解
 
-（<a href="https://marabos.nl/atomics/memory-ordering.html#common-misconceptions" targt="_blank">英文版本</a>）
+（<a href="https://marabos.nl/atomics/memory-ordering.html#common-misconceptions" target="_blank">英文版本</a>）
 
 围绕内存排序有很多误解。在我们结束本章之前，让我们回顾一下最常见的误解。
 
@@ -698,7 +698,7 @@ fn main() {
 
 ## 总结
 
-（<a href="https://marabos.nl/atomics/memory-ordering.html#summary" targt="_blank">英文版本</a>）
+（<a href="https://marabos.nl/atomics/memory-ordering.html#summary" target="_blank">英文版本</a>）
 
 * 所有的原子操作可能没有全局一致的顺序，因为不同的线程视角可能会以不同的顺序发生。
 * 然而，每个单独的原子变量都有它自己的*总修改顺序*，不管内存排序如何，所有线程都会达成一致意见。

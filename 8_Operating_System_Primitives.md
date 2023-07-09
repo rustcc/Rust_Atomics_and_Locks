@@ -1,6 +1,6 @@
 # 第八章：操作系统原语
 
-（<a href="https://marabos.nl/atomics/os-primitives.html" targt="_blank">英文版本</a>）
+（<a href="https://marabos.nl/atomics/os-primitives.html" target="_blank">英文版本</a>）
 
 目前，我们主要聚焦在非阻塞的操作中。如果我们想要实现一些类似互斥锁或者条件变量的内容，也就是能够等待另一个线程去解锁或者通知它的内容，我们需要一种有效地阻塞当前线程的方式。
 
@@ -12,7 +12,7 @@
 
 ## 使用内核接口
 
-（<a href="https://marabos.nl/atomics/os-primitives.html#interfacing-with-the-kernel" targt="_blank">英文版本</a>）
+（<a href="https://marabos.nl/atomics/os-primitives.html#interfacing-with-the-kernel" target="_blank">英文版本</a>）
 
 与内核进行通信的方式很大程度依赖于操作系统，甚至是它的版本。通常，如何工作的细节被一个库或者更多库所隐藏，这些库为我们处理这些细节。例如，使用 Rust 的标准库，我们可以仅调用 `File::open()` 去打开这个文件，而不必关心任何操作系统内核的细节。类似地，使用 C 标准库（`libc`）也可以调用标准的 `fopen()` 函数去打开一个文件。调用这样的函数最终会导致调用操作系统内核，也称为*系统调用*（syscall），通常通过专门的处理器指令来完成（在某些架构上，该指令甚至直接称为 syscall）。
 
@@ -32,7 +32,7 @@ Windows 不遵循 POSIX 标准。它并没有携带一个拓展的 libc 作为�
 
 ## POSIX
 
-（<a href="https://marabos.nl/atomics/os-primitives.html#posix" targt="_blank">英文版本</a>）
+（<a href="https://marabos.nl/atomics/os-primitives.html#posix" target="_blank">英文版本</a>）
 
 作为 POSIX 线程扩展的一部分，更为人熟知的是 pthread，POSIX 规范了用于并发的数据类型和函数。尽管 libthread 在技术上是作为一个独立的系统库的一部分，但是如今它通常被直接包含在 libc 中。
 
@@ -68,7 +68,7 @@ Windows 不遵循 POSIX 标准。它并没有携带一个拓展的 libc 作为�
 
 ### 在 Rust 中包装类型
 
-（<a href="https://marabos.nl/atomics/os-primitives.html#wrapping-in-rust" targt="_blank">英文版本</a>）
+（<a href="https://marabos.nl/atomics/os-primitives.html#wrapping-in-rust" target="_blank">英文版本</a>）
 
 通过方便地将其 C 类型（通过 libc crate）包装在 Rust 结构体中，我们可以轻松地将这些 pthread 同步原语暴露给 Rust，例如：
 
@@ -131,7 +131,7 @@ fn main() {
 
 ## Linux
 
-<a href="https://marabos.nl/atomics/os-primitives.html#linux" targt="_blank">英文版本</a>
+<a href="https://marabos.nl/atomics/os-primitives.html#linux" target="_blank">英文版本</a>
 
 在 Linux 系统中，pthread 同步原语所有都是使用 *futex 系统调用*实现。它的名称来自“快速用户互斥[^6]”（fast user-space mutex），因为**增加**这个系统调用最初的动机就是允许库（如 pthread 实现）包含一个快速且高效 mutex 实现。它的灵活远不止于此，可以用来构建许多不同的同步工具。
 
@@ -139,7 +139,7 @@ fn main() {
 
 ### Futex
 
-<a href="https://marabos.nl/atomics/os-primitives.html#futex" targt="_blank">英文版本</a>
+<a href="https://marabos.nl/atomics/os-primitives.html#futex" target="_blank">英文版本</a>
 
 在 Linux 上，`SYS_futex` 是一个系统调用，在 32 位的原子整数上它实现了各种操作。主要的两个操作是 `FUTEX_WAIT` 和 `FUTEX_WAKE`。等待操作会让线程进入睡眠状态，而在同一个原子变量上进行唤醒操作则会将线程唤醒。
 
@@ -224,7 +224,7 @@ fn main() {
 
 ### Futex 操作
 
-<a href="https://marabos.nl/atomics/os-primitives.html#futex-ops" targt="_blank">英文版本</a>
+<a href="https://marabos.nl/atomics/os-primitives.html#futex-ops" target="_blank">英文版本</a>
 
 接下来到等待和唤醒操作，futex 系统调用还支持其他几个操作。在该章节，我们将简要地讨论此系统调用的每个支持的操作。
 
@@ -332,7 +332,7 @@ futex 的第一个参数始终是指向要操作的 32 位原子变量的指针�
 
 ### 优先继承 Futex 操作
 
-（<a href="https://marabos.nl/atomics/os-primitives.html#priority-inheritance-futex-operations" targt="_blank">英文版本</a>）
+（<a href="https://marabos.nl/atomics/os-primitives.html#priority-inheritance-futex-operations" target="_blank">英文版本</a>）
 
 优先级反转[^7]是指高优先级线程在低优先级线程持有的锁上被阻塞的问题。高优先级线程实际上“反转”了它的优先级，因为它现在必须等待低优先级线程释放锁才能继续执行。
 
@@ -352,7 +352,7 @@ futex 的第一个参数始终是指向要操作的 32 位原子变量的指针�
 
 ## macOS
 
-（<a href="https://marabos.nl/atomics/os-primitives.html#macos" targt="_blank">英文版本</a>）
+（<a href="https://marabos.nl/atomics/os-primitives.html#macos" target="_blank">英文版本</a>）
 
 macOS 部分的内核支持各种有用的低级并发相关的系统调用。然而，就像大多数操作系统一样，内核接口并不是稳定的，并且我们应该直接地使用它。
 
@@ -364,7 +364,7 @@ macOS 部分的内核支持各种有用的低级并发相关的系统调用。�
 
 ### os_unfair_lock
 
-（<a href="https://marabos.nl/atomics/os-primitives.html#os-unfair-lock" targt="_blank">英文版本</a>）
+（<a href="https://marabos.nl/atomics/os-primitives.html#os-unfair-lock" target="_blank">英文版本</a>）
 
 除了 pthread 原语，macOS 10.12 引入了一种新的轻量级平台特定的互斥锁，它是不公平的：`os_unfair_lock`。它的大小仅有 32 位，可以使用 OS_UNFAIR_LOCK_INIT 常来那个静态地初始化，并且不需要销毁。它可以通过 `os_unfair_lock_lock()`（阻塞）或 `os_unfair_lock_trylock()`（非阻塞）来锁定它，并且通过 `os_unfair_lock_unlock()` 来解锁。
 
@@ -372,7 +372,7 @@ macOS 部分的内核支持各种有用的低级并发相关的系统调用。�
 
 ## Windows
 
-（<a href="https://marabos.nl/atomics/os-primitives.html#windows" targt="_blank">英文版本</a>）
+（<a href="https://marabos.nl/atomics/os-primitives.html#windows" target="_blank">英文版本</a>）
 
 Windows 操作系统携带了一系列库，它们一起形成了 *Windows API*，通常称之为“Win32 API”（甚至在 64 位系统也是）。它构成了一个在“Native 之上”的层：大部分是与内核没有交互的接口，我们不建议直接使用它。
 
@@ -380,7 +380,7 @@ Windows 操作系统携带了一系列库，它们一起形成了 *Windows API*�
 
 ### 重量级内核对象
 
-（<a href="https://marabos.nl/atomics/os-primitives.html#heavyweight-kernel-objects" targt="_blank">英文版本</a>）
+（<a href="https://marabos.nl/atomics/os-primitives.html#heavyweight-kernel-objects" target="_blank">英文版本</a>）
 
 在 Windows 上可用的许多旧的同步原语完全由内核管理，这使得它们非常重量，并赋予它们与其他内核管理对象（例如文件）类似的属性。它们可以被多个进程使用，可以通过名称进行命名和定位，并且支持细粒度的权限，类似于文件。例如，可以允许一个进程等待某个对象，而不允许它通过该对象发送信号来唤醒其他进程。
 
@@ -388,7 +388,7 @@ Windows 操作系统携带了一系列库，它们一起形成了 *Windows API*�
 
 ### 轻量级对象
 
-（<a href="https://marabos.nl/atomics/os-primitives.html#lighter-weight-objects" targt="_blank">英文版本</a>）
+（<a href="https://marabos.nl/atomics/os-primitives.html#lighter-weight-objects" target="_blank">英文版本</a>）
 
 在 Windows API 中，一个轻量级的同步原语包括是“临界区[^4]”（critical section）。
 
@@ -404,7 +404,7 @@ CRITICAL_SECTION 使用 `InitializeCriticalSection()` 函数来初始化，使�
 
 #### 精简的读写（SRW）锁[^5]
 
-（<a href="https://marabos.nl/atomics/os-primitives.html#windows-srw" targt="_blank">英文版本</a>）
+（<a href="https://marabos.nl/atomics/os-primitives.html#windows-srw" target="_blank">英文版本</a>）
 
 从 Windows Vista（和 Windows Server 2008）开始，Windows API 包含了一个非常轻量级的优秀锁原语：*精简读写锁*，简称 *SRW 锁*。
 
@@ -424,7 +424,7 @@ SRW 锁与条件变量一起引入了 Windows API。`CONDITION_VARIABLE` 仅占�
 
 ### 基于地址的等待
 
-（<a href="https://marabos.nl/atomics/os-primitives.html#address-based-waiting" targt="_blank">英文版本</a>）
+（<a href="https://marabos.nl/atomics/os-primitives.html#address-based-waiting" target="_blank">英文版本</a>）
 
 Windows 8（和 Windows Server 2012）引入了一种新的、更灵活的同步功能类型，非常类似于本章前面讨论的 Linux `FUTEX_WAIT` 和 `FUTEX_WAKE` 操作。
 
@@ -438,7 +438,7 @@ Windows API 的一些（但不是全部）同步原语是使用这些函数实�
 
 ## 总结
 
-（<a href="https://marabos.nl/atomics/os-primitives.html#summary" targt="_blank">英文版本</a>）
+（<a href="https://marabos.nl/atomics/os-primitives.html#summary" target="_blank">英文版本</a>）
 
 * *系统调用*（syscall）是进入操作系统内核的调用，与普通函数调用相比，相对较慢。
 * 通常，程序不直接进行系统调用，而是通过操作系统的库（如 `libc`）与内核进行交互。在许多操作系统中，这是与内核进行交互的唯一支持方式。

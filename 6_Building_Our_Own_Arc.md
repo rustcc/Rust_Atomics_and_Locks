@@ -1,6 +1,6 @@
 # 第六章：构建我们自己的“Arc”
 
-（<a href="https://marabos.nl/atomics/building-arc.html" targt="_blank">英文版本</a>）
+（<a href="https://marabos.nl/atomics/building-arc.html" target="_blank">英文版本</a>）
 
 在[第一章“引用计数”](./1_Basic_of_Rust_Concurrency.md#引用计数)中，我们了解了 `std::sync::Arc<T>` 类型允许通过引用计数共享所有权。`Arc::new` 函数创建一个新的内存分配，就像 `Box::new`。然而，与 Box 不同的是，克隆 Arc 将共享原始的内存分配，而不是创建一个新的。只有当 Arc 和所有其他的克隆被丢弃，共享的内存分配才会被丢弃。
 
@@ -8,7 +8,7 @@
 
 ## 基础的引用计数
 
-（<a href="https://marabos.nl/atomics/building-arc.html#basic-reference-counting" targt="_blank">英文版本</a>）
+（<a href="https://marabos.nl/atomics/building-arc.html#basic-reference-counting" target="_blank">英文版本</a>）
 
 我们的第一个版本将使用单个 `AtomicUsize` 去计数 Arc 对象共享分配的数量。让我们开始使用一个持有计数器和 T 对象的结构体：
 
@@ -141,7 +141,7 @@ impl<T> Drop for Arc<T> {
 
 ### 测试它
 
-（<a href="https://marabos.nl/atomics/building-arc.html#testing-it" targt="_blank">英文版本</a>）
+（<a href="https://marabos.nl/atomics/building-arc.html#testing-it" target="_blank">英文版本</a>）
 
 为了测试我们的 Arc 是否按预期运行，我们可以编写一个单元测试，创建一个包含特殊对象的 `Arc`，让我们知道何时它被丢弃时：
 
@@ -202,7 +202,7 @@ fn test() {
 
 ### 可变性
 
-（<a href="https://marabos.nl/atomics/building-arc.html#mutation" targt="_blank">英文版本</a>）
+（<a href="https://marabos.nl/atomics/building-arc.html#mutation" target="_blank">英文版本</a>）
 
 正如之前提及的，我们不能为我们的 Arc 实现 DerefMut。我们不能无条件地承诺对数据的独占访问（`&mut T`），因为它能够通过其他 Arc 对象访问。
 
@@ -235,7 +235,7 @@ fn test() {
 
 ## Weak 指针
 
-（<a href="https://marabos.nl/atomics/building-arc.html#weak-pointers" targt="_blank">英文版本</a>）
+（<a href="https://marabos.nl/atomics/building-arc.html#weak-pointers" target="_blank">英文版本</a>）
 
 当表示在内存中多个对象组成的结构时，引用计数非常有用。例如，在树结构中的每个节点可以包含对其子节点的 Arc 引用。这样，当我们丢弃一个节点时，不再使用的孩子节点也会被（递归地）丢弃。
 
@@ -460,7 +460,7 @@ impl<T> Arc<T> {
 
 ### 测试它2
 
-（<a href="https://marabos.nl/atomics/building-arc.html#arc-weak-test" targt="_blank">英文版本</a>）
+（<a href="https://marabos.nl/atomics/building-arc.html#arc-weak-test" target="_blank">英文版本</a>）
 
 为了快速测试我们创建的内容，我们将修改之前的单元测试，以使用 weak 指针，并验证它们是否可以在预期的情况下升级：
 
@@ -508,7 +508,7 @@ fn test() {
 
 ### 优化
 
-（<a href="https://marabos.nl/atomics/building-arc.html#optimizing-arc" targt="_blank">英文版本</a>）
+（<a href="https://marabos.nl/atomics/building-arc.html#optimizing-arc" target="_blank">英文版本</a>）
 
 虽然 weak 指针是可用的，但 Arc 类型通常用于没有任何 weak 的情况下。我们上次实现的缺点是，克隆和丢弃 Arc 现在都需要两个原子操作，因为它们不得不递增或递减两个计数器。这使得 Arc 用于丢弃 weak 指针的开销增大，即使它们没有使用 weak 指针。
 
@@ -782,7 +782,7 @@ impl<T> Weak<T> {
 
 ## 总结
 
-（<a href="https://marabos.nl/atomics/building-arc.html#summary" targt="_blank">英文版本</a>）
+（<a href="https://marabos.nl/atomics/building-arc.html#summary" target="_blank">英文版本</a>）
 
 * `Arc<T>` 提供一个引用计数分配的共享所有权。
 * 通过检查引用计数是否确实是一个 `Arc<T>`，可以有条件地提供独占访问（`&mut T`）。
