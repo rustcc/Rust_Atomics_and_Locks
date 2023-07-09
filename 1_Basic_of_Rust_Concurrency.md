@@ -1,5 +1,7 @@
 # 第一章：Rust 并发基础
 
+（<a href="https://marabos.nl/atomics/basics.html" target="_blank">英文版本</a>）
+
 早在多核处理器司空见惯之前，操作系统就允许一台计算机运行多个程序。这是通过在进程之间快速切换来完成的，允许每个进程逐个地逐次取得一点进展。现在，几乎所有的电脑，甚至手机和手表都有着多核处理器，可以真正并行执行多个程序。
 
 操作系统尽可能的将进程之间隔离，允许程序完全意识不到其他线程在做什么的情况下做自己的事情。例如，在不先询问操作系统内核的情况下，一个进程通常不能获取其他进程的内存，或者以任意方式与之通信。
@@ -11,6 +13,8 @@
 > 如果你已经熟悉 Rust 中的这些部分，你可以随时跳过。然而，在你继续下一章节之前，请确保你对线程、内部可变性、Send 和 Sync 有一个好的理解，以及知道什么是互斥锁[^2]、条件变量[^1]以及线程阻塞（park）[^3]。
 
 ## Rust 中的线程
+
+（<a href="https://marabos.nl/atomics/basics.html#threads" target="_blank">英文版本</a>）
 
 每个程序都从一个线程开始：主（main）线程。该线程将执行你的 main 函数，并且如果需要，它可以用于产生更多线程。
 
@@ -154,6 +158,8 @@ println!("average: {average}");
 
 ## 作用域内的线程
 
+（<a href="https://marabos.nl/atomics/basics.html#scoped-threads" target="_blank">英文版本</a>）
+
 如果我们确信生成的线程不会比某个范围存活更久，那么线程可以安全地借用哪些不会一直存在的东西，例如局部变量，只要它们比该范围活得更久。
 
 Rust 标准库提供了 `std::thread::scope` 去产生此类*作用域内的线程*。它允许我们产生不超过我们传递给该函数闭包的范围的线程，这使它可能安全地借用局部变量。
@@ -226,9 +232,13 @@ error[E0499]: cannot borrow `numbers` as mutable more than once at a time
 
 ## 共享所有权以及引用计数
 
+（<a href="https://marabos.nl/atomics/basics.html#shared-ownership-and-reference-counting" target="_blank">英文版本</a>）
+
 目前，我们已经使用了 `move` 闭包（[“Rust 中的线程”](#rust-中的线程)）将值的所有权转移到线程并从生命周期较长的父线程借用数据（[作用域内的线程](#作用域内的线程)）。当两个线程之间共享数据，它们之间的任何一个线程都不能保证比另一个线程的生命周期长，那么它们都不能称为该数据的所有者。它们之间共享的任何数据都需要与最长生命周期的线程一样长。
 
 ### Static
+
+（<a href="https://marabos.nl/atomics/basics.html#statics" target="_blank">英文版本</a>）
 
 有几种方式去创建不属于单线程的东西。最简单的方式是**静态**值，它由整个程序“拥有”，而不是单个线程。在以下示例中，这两个线程都可以获取 X，但是它们并不拥有它：
 
@@ -242,6 +252,8 @@ thread::spawn(|| dbg!(&X));
 静态项一般由一个常量初始化，它从不会被丢弃，并且甚至在程序的主线程开始之前就已经存在。每个线程都可以借用它，因为它保证它总是存在。
 
 ### 泄漏（Leak）
+
+（<a href="https://marabos.nl/atomics/basics.html#leaking" target="_blank">英文版本</a>）
 
 另一种方式是通过*泄漏*内存分配的方式共享所有权。使用 `Box::leak`，人们可以释放 `Box` 的所有权，保证永远不会丢弃它。从那时起，`Box` 将永远存在，没有所有者，只要程序运行，任意线程都可以借用它。
 
@@ -261,6 +273,8 @@ thread::spawn(move || dbg!(x));
 泄漏 `Box` 的缺点是我们正在泄漏内存。我们获取一些内存，但是从未丢弃和释放它。如果仅发生有限的次数，这就可以了。但是如果我们继续这样做，程序将慢慢地耗尽内存。
 
 ### 引用计数
+
+（<a href="https://marabos.nl/atomics/basics.html#arc" target="_blank">英文版本</a>）
 
 为了确保共享数据能够丢弃和释放内存，我们不能完全放弃它的所有权。相反，我们可以*分享所有权*。通过跟踪所有者的数量，我们确保仅当没有所有者时，才会丢弃该值。
 
@@ -352,6 +366,8 @@ error[E0596]: cannot borrow data in an `Arc` as mutable
 
 ## 借用和数据竞争
 
+（<a href="https://marabos.nl/atomics/basics.html#borrowing-and-races" target="_blank">英文版本</a>）
+
 在 Rust 中，可以使用两种方式借用值。
 
 * *不可变借用*
@@ -417,6 +433,8 @@ let b = unsafe { a.get_unchecked(index) };</pre>
 
 ## 内部可变性
 
+（<a href="https://marabos.nl/atomics/basics.html#interior-mutability" target="_blank">英文版本</a>）
+
 上一节介绍的借用规则可能非常有限——尤其涉及多个线程时。遵循这些规则在线程之间通信极其有限，并且是不可能的，因为多个线程访问的数据都无法改变。
 
 幸运地是，有一个逃生方式：<i>内部可变性</i>。有着内部可变性的数据类型略微改变了借用规则。在某些情况下，这些类型可以使用“不可变”的引用进行可变。
@@ -430,6 +448,8 @@ let b = unsafe { a.get_unchecked(index) };</pre>
 让我们看一看有着内部可变性的一些示例，以及如何通过共享引用允许可变性而不导致未定义行为。
 
 ### Cell
+
+（<a href="https://marabos.nl/atomics/basics.html#cell" target="_blank">英文版本</a>）
 
 `std::cell::Cell<T>` 仅是包装了 T，但允许通过共享引用进行可变。为避免未定义行为，它仅允许你将值复制出来（如果 T 实现 Copy）或者将其替换为另一个整体值。此外，它仅用于单个线程。
 
@@ -462,6 +482,8 @@ fn f(v: &Cell<Vec<i32>>) {
 
 ### RefCell
 
+（<a href="https://marabos.nl/atomics/basics.html#refcell" target="_blank">英文版本</a>）
+
 与常规的 Cell 不同的是，`std::cell::RefCell` 允许你以很小的运行时花费去借用它的内容。`RefCell<T>` 不仅持有 T，同时也持跟踪任何未解除的借用。如果你尝试在已经可变借用时尝试借用（或反之亦然），它会引发 panic，以避免出现未定义行为。就像 Cell，RefCell 只能在单个线程中使用。
 
 借用 RefCell 的内容通过调用 `borrow` 或者 `borrow_mut` 完成：
@@ -478,6 +500,8 @@ fn f(v: &RefCell<Vec<i32>>) {
 
 ### 互斥锁和读写锁
 
+（<a href="https://marabos.nl/atomics/basics.html#mutex-and-rwlock" target="_blank">英文版本</a>）
+
 *读写锁*（RwLock）[^5]是 `RefCell` 的并发版本。`RwLock<T>` 持有 T 并且跟踪任意未解除的借用。然而，与 RefCell 不同，它在冲突借用中不会 panic。相反，它会阻塞当先线程——使它进入睡眠——直到冲突借用消失才会唤醒。在其它线程完成后，我们仅需要耐心的等待轮到我们处理数据。
 
 借用 RwLock 的内容称为*锁*。通过锁定它，我们临时阻塞并发的冲突借用，这允许我们没有导致数据竞争的借用它。
@@ -488,6 +512,8 @@ fn f(v: &RefCell<Vec<i32>>) {
 
 ### Atomic
 
+（<a href="https://marabos.nl/atomics/basics.html#atomics" target="_blank">英文版本</a>）
+
 原子类型表示 Cell 的并发版本，是第 [2](./2_Atomics.md) 章和第 [3](./3_Memory_Ordering.md) 章的主题。与 Cell 相同，它们通过将整个值进行复制来避免未定义行为，而不直接让我们借用内容。
 
 与 Cell 不同的是，它们不能是任意大小的。因此，任何 T 都没有通用的 `Atomic<T>` 类型，但仅有特定的原子类型，例如 `AtomicU32` 和 `AtomicPtr<T>`。哪些可用取决于平台，因为它们需要处理器的支持来避免数据竞争。（我们将在[第七章](./7_Understanding_the_Processor.md)研究这个问题。）
@@ -496,6 +522,8 @@ fn f(v: &RefCell<Vec<i32>>) {
 
 ### UnsafeCell
 
+（<a href="https://marabos.nl/atomics/basics.html#unsafecell" target="_blank">英文版本</a>）
+
 `UnsafeCell` 是内部可变性的原始基石。
 
 `UnsafeCell<T>` 包装 T，但是没有附带任何条件和限制来避免未定义行为。相反，它的 `get()` 方法仅是给出了它包装值的原始指针，该值仅可以在 `unsafe` 块中使用。它以用户不会导致任何未定义行为的方式使用它。
@@ -503,6 +531,8 @@ fn f(v: &RefCell<Vec<i32>>) {
 更常见的是，不会直接使用 UnsafeCell，而是将它包装在另一个类型，通过限制接口提供安全，例如 `Cell` 和 `Mutex`。所有有着内部可变性的类型——包括所有以上讨论的类型都建立在 UnsafeCell 之上。
 
 ## 线程安全：Send 和 Sync
+
+（<a href="https://marabos.nl/atomics/basics.html#thread-safety" target="_blank">英文版本</a>）
 
 在这一章节中，我们已经看见一个不是*线程安全*的类型，这些类型仅用于一个单线程，例如 `Rc`、`Cell` 以及其它。由于需要这些限制来避免未定义行为，所以编译器需要理解并为你检查这个限制，这样你就可以在不使用 unsafe 块的情况下使用这些类型。
 
@@ -582,6 +612,8 @@ note: required by a bound in `spawn`
 
 ## 锁：互斥锁和读写锁
 
+（<a href="https://marabos.nl/atomics/basics.html#mutexes" target="_blank">英文版本</a>）
+
 在线程之间共享（可变）数据更常规的有用工具是 `mutex`，它是“互斥”（mutual exclusion）的缩写。mutex 的工作是通过暂时阻塞其它试图同时访问某些数据的线程，来确保线程对某些数据进行独占访问。
 
 概念上，mutex 仅有两个状态：锁定和解锁。当线程锁住一个未解锁的 mutex，mutex 被标记为锁定，线程可以立即继续。当线程尝试锁住一个已锁定的 mutex，操作将*阻塞*。当线程等待 mutex 解锁时，其会置入睡眠状态。解锁仅能在锁定的 mutex 上进行，并且应当由锁定它的同一线程完成。如果其它线程正在等待锁定 mutex，解锁将导致唤醒其中一个线程，因此它可以尝试再次锁定 mutex 并且继续它的过程。
@@ -589,6 +621,8 @@ note: required by a bound in `spawn`
 使用 mutex 保护数据仅是所有线程之间的约定，当它们在 mutex 锁定时，它们才能获取数据。这种方式，没有两个线程可以并发地获取数据和导致数据竞争。
 
 ### Rust 的互斥锁
+
+（<a href="https://marabos.nl/atomics/basics.html#rusts-mutex" target="_blank">英文版本</a>）
 
 Rust 的标准库通过 `std::sync::Mutex<T>` 提供这个功能。它对类型 T 进行范型化，该类型 T 是 mutex 所保护的数据类型。通过将 T 作为 mutex 的一部分，该数据仅可以通过 mutex 获取，从而提供一个安全的接口，以保证所有线程都遵守这个约定。
 
@@ -670,6 +704,8 @@ fn main() {
 
 ### 锁中毒（posion）
 
+（<a href="https://marabos.nl/atomics/basics.html#lock-poisoning" target="_blank">英文版本</a>）
+
 上述示例中 `unwarp()` 调用和*锁中毒*有关。
 
 当线程在持有锁时 panic，Rust 中的 mutex 将被标记为*中毒*。当这种情况发生时，Mutex 将不再被锁定，但调用它的 `lock` 方法将导致 `Err`，以表明它已经中毒。
@@ -714,6 +750,8 @@ if let Some(item) = item {
 
 ### 读写锁
 
+（<a href="https://marabos.nl/atomics/basics.html#reader-writer-lock" target="_blank">英文版本</a>）
+
 互斥锁仅涉及独占访问。MutexGuard 将提供受保护数据的一个独占引用（`&mut T`），即使我们仅想要查看数据，并且共享引用（`&T`）就足够了。
 
 读写锁是一个略微更复杂的 mutex 版本，它能够区分独占访问和共享访问的区别，并且可以提供两种访问方式。它有三种状态：解锁、由单个 *writer* 锁定（用于独占访问）以及由任意数量的 reader 锁定（用于共享访问）。它通常用于通常由多个线程读取的数据，但只是偶尔一次。
@@ -737,11 +775,15 @@ Rust 标准库仅提供一种通用的 `RwLock` 类型，但它的实现依赖�
 
 ## 等待: 阻塞（Park）和条件变量
 
+（<a href="https://marabos.nl/atomics/basics.html#waiting" target="_blank">英文版本</a>）
+
 当数据由多个线程更改时，在许多情况下，它们需要等待一些事件，以便管有数据的某些条件变为真。例如，如果我们有一个保护 Vec 的 mutex，我们可能想要等待直到它包含任何东西。
 
 尽管 mutex 允许线程等待直到它解锁，但它不提供等待任何其它条件的功能。如果我们只拥有一个 mutex，我们不得不持有锁定的 mutex，以反复检查 Vec 中是否有任意东西。
 
 ### 线程阻塞
+
+（<a href="https://marabos.nl/atomics/basics.html#parking" target="_blank">英文版本</a>）
 
 一种方式是去等待来自另一个线程的通知，其被称为*线程阻塞*。一个线程可以阻塞它自己，将它置入睡眠状态，阻止它消耗任意 CPU 周期。然后，另一个线程可以解锁阻塞的线程，将其从睡眠中唤醒。
 
@@ -805,6 +847,8 @@ fn main() {
 
 ### 条件变量
 
+（<a href="https://marabos.nl/atomics/basics.html#condvar" target="_blank">英文版本</a>）
+
 条件变量是一个更通用的选项，用于等待受 mutex 保护的数据发生变化。它有两种基本操作：等待和通知。线程可以在条件变量上等待，然后在另一个线程通知相同条件变量时被唤醒。多个线程可以在同样的条件变量上等待，通知可以发送给一个等待线程或者所有等待线程。
 
 这意味着我们可以为我们感兴趣的事件或条件创建一个条件变量，例如，队列是非空的，并且在该条件下等待。任意导致事件或条件发生的线程都会通知条件变量，无需知道那个或有多个线程对该通知感兴趣。
@@ -863,6 +907,8 @@ Condvar 的缺点是，它仅能与 Mutex 一起工作，对于大多数用例�
 `thread::park()` 和 `Condvar::wait()` 也都有一个有时间限制的变体：`thread::park_timeout()` 和 `Condvar::wait_timeout()`。它们接受一个额外的参数 Duration，表示在多长时间后放弃等待通知并无条件地唤醒。
 
 ## 总结
+
+（<a href="https://marabos.nl/atomics/basics.html#summary" target="_blank">英文版本</a>）
 
 * 多线程可以并发地运行在相同程序并且可以在任意时间生成。
 * 当主线程结束，主程序结束。
