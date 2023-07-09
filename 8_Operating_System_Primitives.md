@@ -110,8 +110,8 @@ pub struct Mutex {
 fn main() {
     let m = Mutex::new(..);
 
-    let guard = m.lock(); // Lock it ..
-    std::mem::forget(guard); // .. but don't unlock it.
+    let guard = m.lock(); // 锁定它 ..
+    std::mem::forget(guard); // .. 但是没有解锁它。
 }
 ```
 
@@ -148,26 +148,26 @@ fn main() {
 compile_error!("Linux only. Sorry!");
 
 pub fn wait(a: &AtomicU32, expected: u32) {
-    // Refer to the futex (2) man page for the syscall signature.
+    // 参考 futex (2) 手册中的系统调用签名
     unsafe {
         libc::syscall(
-            libc::SYS_futex, // The futex syscall.
-            a as *const AtomicU32, // The atomic to operate on.
-            libc::FUTEX_WAIT, // The futex operation.
-            expected, // The expected value.
-            std::ptr::null::<libc::timespec>(), // No timeout.
+            libc::SYS_futex, // futex 系统调用
+            a as *const AtomicU32, // 要操作的原子
+            libc::FUTEX_WAIT, // futex 操作
+            expected, // 预期的值
+            std::ptr::null::<libc::timespec>(), // 不能超时
         );
     }
 }
 
 pub fn wake_one(a: &AtomicU32) {
-    // Refer to the futex (2) man page for the syscall signature.
+    // 参考 futex (2) 手册中的系统调用签名
     unsafe {
         libc::syscall(
-            libc::SYS_futex, // The futex syscall.
-            a as *const AtomicU32, // The atomic to operate on.
-            libc::FUTEX_WAKE, // The futex operation.
-            1, // The number of threads to wake up.
+            libc::SYS_futex, // futex 系统调用
+            a as *const AtomicU32, // 要操作的原子
+            libc::FUTEX_WAKE, // futex 操作
+            1, // 要唤醒的线程数量
         );
     }
 }
@@ -404,7 +404,7 @@ Windows 8（和 Windows Server 2012）引入了一种新的、更灵活的同步
 
 唤醒正在等待 `WaitOnAddress` 的线程可以通过 `WakeByAddressSingle` 来唤醒单个线程，或者通过 `WakeByAddressAll` 来唤醒所有等待的线程。这两个函数只接受一个参数：原子变量的地址，该地址也被传递给 `WaitOnAddress`。
 
-Windows API 的一些（但不是全部）同步原语是使用这些函数实现的。更重要的是，它们是构建我们自己的原始物的绝佳基石，我们将在[第 9 章](./9_Building_Our_Own_Locks.md)中这样做。
+Windows API 的一些（但不是全部）同步原语是使用这些函数实现的。更重要的是，它们是构建我们自己的原始物的绝佳基石，我们将在[第九章](./9_Building_Our_Own_Locks.md)中这样做。
 
 ## 总结
 

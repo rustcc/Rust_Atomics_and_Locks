@@ -196,8 +196,8 @@ fn main() {
     });
     a.join().unwrap();
     b.join().unwrap();
-    assert_eq!(X.load(Relaxed), 0); // Might fail?
-    assert_eq!(Y.load(Relaxed), 0); // Might fail?
+    assert_eq!(X.load(Relaxed), 0); // 可能失败？
+    assert_eq!(Y.load(Relaxed), 0); // 可能失败
 }</pre>
 
   <p>似乎很容易得出 X 和 Y 的值不会是除 0 以外的任何东西的结论，因为 store 操作仅从这项相同的原子中加载值，而这些原子仅是 0。</p>
@@ -228,9 +228,9 @@ static READY: AtomicBool = AtomicBool::new(false);
 fn main() {
     thread::spawn(|| {
         DATA.store(123, Relaxed);
-        READY.store(true, Release); // Everything from before this store ..
+        READY.store(true, Release); // 在这个 store 之前的所有操作都会在这个 store 操作之后可见
     });
-    while !READY.load(Acquire) { // .. is visible after this loads `true`.
+    while !READY.load(Acquire) { // READY 的值变为 true，表示前面的存储操作对于其他线程可见
         thread::sleep(Duration::from_millis(100));
         println!("waiting...");
     }
@@ -258,16 +258,16 @@ static READY: AtomicBool = AtomicBool::new(false);
 
 fn main() {
     thread::spawn(|| {
-        // Safety: Nothing else is accessing DATA,
-        // because we haven't set the READY flag yet.
+        // 安全的：没有其他东西正在访问 DATA，
+        // 因为我们还没有设置 READY 标识。
         unsafe { DATA = 123 };
-        READY.store(true, Release); // Everything from before this store ..
+        READY.store(true, Release); // 在这个 store 之前的所有操作都会在这个 store 操作之后可见
     });
-    while !READY.load(Acquire) { // .. is visible after this loads `true`.
+    while !READY.load(Acquire) { // READY 的值变为 true，表示前面的存储操作对于其他线程可见
         thread::sleep(Duration::from_millis(100));
         println!("waiting...");
     }
-    // Safety: Nothing is mutating DATA, because READY is set.
+    // 安全地：没有其他东西修改 DATA，因为 READY 已设置。
     println!("{}", unsafe { DATA });
 }
 ```
@@ -325,7 +325,7 @@ static LOCKED: AtomicBool = AtomicBool::new(false);
 
 fn f() {
     if LOCKED.compare_exchange(false, true, Acquire, Relaxed).is_ok() {
-        // Safety: We hold the exclusive lock, so nothing else is accessing DATA.
+        // 安全地：我们持有独占的锁，所以没有其他东西访问 DATA。
         unsafe { DATA.push('!') };
         LOCKED.store(false, Release);
     }
@@ -345,7 +345,7 @@ fn main() {
 > 观察力强的读者可能已经注意到，「比较并交换」操作也可能是交换操作，因为在已锁定时将 true 替换为 true 不会改变代码的正确性：
 >
 > ```rust
-> // This also works.
+> // 这也有效。
 > if LOCKED.swap(true, Acquire) == false {
 >    // …
 > }
@@ -387,14 +387,14 @@ fn get_data() -> &'static Data {
         if let Err(e) = PTR.compare_exchange(
             std::ptr::null_mut(), p, Release, Acquire
         ) {
-            // Safety: p comes from Box::into_raw right above,
-            // and wasn't shared with any other thread.
+            // 安全的：p 来自上方的 Box::into_raw，
+            // 并且不能与其他线程共享
             drop(unsafe { Box::from_raw(p) });
             p = e;
         }
     }
 
-    // Safety: p is not null and points to a properly initialized value.
+    // 安全的：p 不是 null，并且指向一个正确初始化的值。
     unsafe { &*p }
 }
 ```

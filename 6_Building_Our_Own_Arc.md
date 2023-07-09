@@ -112,7 +112,7 @@ impl<T> Deref for Arc<T> {
 ```rust
 impl<T> Drop for Arc<T> {
     fn drop(&mut self) {
-        // TODO: Memory ordering.
+        // TODO：内存排序
         if self.data().ref_count.fetch_sub(1, …) == 1 {
             unsafe {
                 drop(Box::from_raw(self.ptr.as_ptr()));
@@ -140,7 +140,7 @@ impl<T> Drop for Arc<T> {
 为了测试我们的 Arc 是否按预期运行，我们可以编写一个单元测试，创建一个包含特殊对象的 `Arc`，让我们知道何时它被丢弃时：
 
 ```rust
-# [test]
+#[test]
 fn test() {
     static NUM_DROPS: AtomicUsize = AtomicUsize::new(0);
 
@@ -152,31 +152,31 @@ fn test() {
         }
     }
 
-    // Create two Arcs sharing an object containing a string
-    // and a DetectDrop, to detect when it's dropped.
+    // 创建两个 Arc，共享一个对象，包含一个字符串
+    // 和一个 DetecDrop，以当它被丢弃时去检测。
     let x = Arc::new(("hello", DetectDrop));
     let y = x.clone();
 
-    // Send x to another thread, and use it there.
+    // 发送 x 到另一个线程，并在那里使用它。
     let t = std::thread::spawn(move || {
         assert_eq!(x.0, "hello");
     });
 
-    // In parallel, y should still be usable here.
+    // 这是并行的，y 应该仍然在这里可用。
     assert_eq!(y.0, "hello");
 
-    // Wait for the thread to finish.
+    // 等待线程完成。
     t.join().unwrap();
 
-    // One Arc, x, should be dropped by now.
-    // We still have y, so the object shouldn't have been dropped yet.
+    // Arc，x 现在应该被丢弃。
+    // 我们仍然有 y，因此对象仍然还没有被丢弃。
     assert_eq!(NUM_DROPS.load(Relaxed), 0);
 
-    // Drop the remaining `Arc`.
+    // 丢弃剩余的 `Arc`。
     drop(y);
 
-    // Now that `y` is dropped too,
-    // the object should've been dropped.
+    // 现在，`y` 也被丢弃，
+    // 对象应该也被丢弃。
     assert_eq!(NUM_DROPS.load(Relaxed), 1);
 }
 ```
@@ -210,8 +210,8 @@ fn test() {
     pub fn get_mut(arc: &mut Self) -> Option<&mut T> {
         if arc.data().ref_count.load(Relaxed) == 1 {
             fence(Acquire);
-            // Safety: Nothing else can access the data, since
-            // there's only one Arc, to which we have exclusive access.
+            // 安全的：没有任何其他东西可以访问 data，因为
+            // 只有一个 Arc，我们拥有独占访问的权限。
             unsafe { Some(&mut arc.ptr.as_mut().data) }
         } else {
             None
@@ -247,11 +247,11 @@ fn test() {
 
 ```rust
 struct ArcData<T> {
-    /// Number of `Arc`s.
+    /// `Arc` 的数量
     data_ref_count: AtomicUsize,
-    /// Number of `Arc`s and `Weak`s combined.
+    /// `Arc` 和 `Weak` 总共的数量。
     alloc_ref_count: AtomicUsize,
-    /// The data. `None` if there's only weak pointers left.
+    /// 持有的数据。如果仅剩下 weak 指针，则是 `None`。
     data: UnsafeCell<Option<T>>,
 }
 ```
@@ -311,8 +311,8 @@ impl<T> Deref for Arc<T> {
 
     fn deref(&self) -> &T {
         let ptr = self.weak.data().data.get();
-        // Safety: Since there's an Arc to the data,
-        // the data exists and may be shared.
+        // 安全的：由于 Arc 包装 data，
+        // data 存在并可以共享。
         unsafe { (*ptr).as_ref().unwrap() }
     }
 }
@@ -368,8 +368,8 @@ impl<T> Drop for Arc<T> {
         if self.weak.data().data_ref_count.fetch_sub(1, Release) == 1 {
             fence(Acquire);
             let ptr = self.weak.data().data.get();
-            // Safety: The data reference counter is zero,
-            // so nothing will access it.
+            // 安全的：data 引用计数是 0，
+            // 因此没有任何东西可以访问它。
             unsafe {
                 (*ptr) = None;
             }
@@ -389,13 +389,13 @@ impl<T> Arc<T> {
     pub fn get_mut(arc: &mut Self) -> Option<&mut T> {
         if arc.weak.data().alloc_ref_count.load(Relaxed) == 1 {
             fence(Acquire);
-            // Safety: Nothing else can access the data, since
-            // there's only one Arc, to which we have exclusive access,
-            // and no Weak pointers.
+            // 安全的：没有任何东西可以访问 data，因为
+            // 仅有一个 Arc，并且我们拥有独占访问权限，
+            // 也没有 Weak 指针
             let arcdata = unsafe { arc.weak.ptr.as_mut() };
             let option = arcdata.data.get_mut();
-            // We know the data is still available since we
-            // have an Arc to it, so this won't panic.
+            // 我们知道 data 是仍然可获得的，因为我们
+            // 有一个 Arc 去包裹它，因此不会 panic。
             let data = option.as_mut().unwrap();
             Some(data)
         } else {
@@ -465,28 +465,28 @@ fn test() {
         }
     }
 
-    // Create an Arc with two weak pointers.
+    // 创建一个 Arc，同时也创建两个 weak 指针。
     let x = Arc::new(("hello", DetectDrop));
     let y = Arc::downgrade(&x);
     let z = Arc::downgrade(&x);
 
     let t = std::thread::spawn(move || {
-        // Weak pointer should be upgradable at this point.
+        // 此刻，Weak 指针应该被升级。
         let y = y.upgrade().unwrap();
         assert_eq!(y.0, "hello");
     });
     assert_eq!(x.0, "hello");
     t.join().unwrap();
 
-    // The data shouldn't be dropped yet,
-    // and the weak pointer should be upgradable.
+    // data 仍然不应该被丢弃，
+    // 并且 weak 指针应该被升级。
     assert_eq!(NUM_DROPS.load(Relaxed), 0);
     assert!(z.upgrade().is_some());
 
     drop(x);
 
-    // Now, the data should be dropped, and the
-    // weak pointer should no longer be upgradable.
+    // 现在，data 已经被丢弃，并且
+    // weak 指针应该不再被升级。
     assert_eq!(NUM_DROPS.load(Relaxed), 1);
     assert!(z.upgrade().is_none());
 }
@@ -543,11 +543,11 @@ unsafe impl<T: Sync + Send> Sync for Weak<T> {}
 use std::mem::ManuallyDrop;
 
 struct ArcData<T> {
-    /// Number of `Arc`s.
+    /// `Arc` 的数量
     data_ref_count: AtomicUsize,
-    /// Number of `Weak`s, plus one if there are any `Arc`s.
+    /// `Weak` 的数量，如果有任意的 `Arc` 的数量，加上 1。
     alloc_ref_count: AtomicUsize,
-    /// The data. Dropped if there are only weak pointers left.
+    /// 持有的数据。如果仅剩下 weak 指针，就丢弃它。
     data: UnsafeCell<ManuallyDrop<T>>,
 }
 ```
@@ -587,8 +587,8 @@ impl<T> Deref for Arc<T> {
     type Target = T;
 
     fn deref(&self) -> &T {
-        // Safety: Since there's an Arc to the data,
-        // the data exists and may be shared.
+        // 安全的：因为有一个 Arc 包裹 data，
+        // data 存在不能呗共享。
         unsafe { &*self.data().data.get() }
     }
 }
@@ -646,13 +646,13 @@ impl<T> Drop for Arc<T> {
     fn drop(&mut self) {
         if self.data().data_ref_count.fetch_sub(1, Release) == 1 {
             fence(Acquire);
-            // Safety: The data reference counter is zero,
-            // so nothing will access the data anymore.
+            // 安全的：data 引用计数是 0，
+            // 所以没有东西再访问 data。
             unsafe {
                 ManuallyDrop::drop(&mut *self.data().data.get());
             }
-            // Now that there's no `Arc<T>`s left,
-            //丢弃the implicit weak pointer that represented all `Arc<T>`s.
+            // 现在，没有 `Arc<T>` 了，
+            // 丢弃所有表示 `Arc<T>` 的隐式 weak 指针。
             drop(Weak { ptr: self.ptr });
         }
     }
@@ -700,23 +700,23 @@ impl<T> Weak<T> {
 
 ```rust
     pub fn get_mut(arc: &mut Self) -> Option<&mut T> {
-        // Acquire matches Weak::drop's Release decrement, to make sure any
-        // upgraded pointers are visible in the next data_ref_count.load.
+        // Acquire 与 Weak::drop 的 Release 递减操作匹配，以确保任意的
+        // 指针升级在下一个 data_ref_count.load 中可见。
         if arc.data().alloc_ref_count.compare_exchange(
             1, usize::MAX, Acquire, Relaxed
         ).is_err() {
             return None;
         }
         let is_unique = arc.data().data_ref_count.load(Relaxed) == 1;
-        // Release matches Acquire increment in `downgrade`, to make sure any
-        // changes to the data_ref_count that come after `downgrade` don't
-        // change the is_unique result above.
+        // Release 与 `downgrade` 中的 Acquire 操作匹配，以确保任意
+        // 在 `downgrade` 之后对 data_ref_count 的改变都不会
+        // 改变以上 is_unique 的结果。
         arc.data().alloc_ref_count.store(1, Release);
         if !is_unique {
             return None;
         }
-        // Acquire to match Arc::drop's Release decrement, to make sure nothing
-        // else is accessing the data.
+        // Acquire 去匹配 Arc::drop 的 Release 递减操作，以确保没有
+        // 其他东西正在访问 data。
         fence(Acquire);
         unsafe { Some(&mut *arc.data().data.get()) }
     }
@@ -742,7 +742,7 @@ impl<T> Weak<T> {
                 continue;
             }
             assert!(n <= usize::MAX / 2);
-            // Acquire synchronises with get_mut's release-store.
+            // Acquire 与 get_mut 的 release-store 操作同步。
             if let Err(e) =
                 arc.data()
                     .alloc_ref_count

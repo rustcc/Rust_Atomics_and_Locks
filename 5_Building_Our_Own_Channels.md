@@ -104,7 +104,7 @@ impl<T> Channel<T> {
 要发送消息，它首先需要存储在 cell 中，之后我们可以通过将 ready 标识设置为 true 来将其释放给接收者。试图做这个超过一次是危险的，因为设置 ready 标识后，接收者可能在任意时刻读取消息，这可能会与第二次发送消息产生数据竞争。目前，我们通过使方法不安全并为它们留下备注，将此作为用户的责任：
 
 ```rust
-    /// Safety: Only call this once!
+    /// 安全的：仅能调用一次！
     pub unsafe fn send(&self, message: T) {
         (*self.message.get()).write(message);
         self.ready.store(true, Release);
@@ -124,8 +124,8 @@ impl<T> Channel<T> {
         self.ready.load(Acquire)
     }
 
-    /// Safety: Only call this once,
-    /// and only after is_ready() returns true!
+    /// 安全的：仅能调用一次，
+    /// 并且仅在 is_ready() 返回 true 之后调用！
     pub unsafe fn receive(&self) -> T {
         (*self.message.get()).assume_init_read()
     }
@@ -135,7 +135,7 @@ impl<T> Channel<T> {
 
 结果是一个在技术上可用的 channel，但它用起来不便并且通常令人失望。如果正确使用，它会按预期进行操作，但有很多微妙的方式去错误地使用它。
 
-多次调用 send 可能会导致数据竞争，因为第二个发送者在接收者尝试读取第一条消息时可能正在覆盖数据。即使接收操作得到了正确的同步，从多个线程调用 send 可能会导致两个线程尝试同时写入 cell，再次导致数据竞争。此外，多次调用 `receive` 会导致获取两个消息的副本，即使 T 不实现 `Copy` 并且因此不能安全地进行复制。
+多次调用 send 可能会导致数据竞争，因为第二个发送者在接收者尝试读取第一条消息时可能正在覆盖数据。即使接收操作得到了正确的同步，从多个线程调用 send 可能会导致两个线程尝试并发地写入 cell，再次导致数据竞争。此外，多次调用 `receive` 会导致获取两个消息的副本，即使 T 不实现 `Copy` 并且因此不能安全地进行复制。
 
 更微妙的问题是我们的通道缺乏 `Drop` 实现。`MaybeUninit` 类型不会跟踪它是否已经初始化，因此它在被丢弃时不会自动丢弃其内容。这意味着如果发送了一条消息但从未被接收，该消息将永远不会被丢弃。这不是不正确的，但仍然是要避免。在 Rust 中，泄漏被普遍认为是安全的，但通常只有作为另一个泄漏的结果才是可接受的。例如，泄漏 Vec 也会泄漏其内容，但正常使用 Vec 不会导致任何泄漏。
 
@@ -148,11 +148,11 @@ impl<T> Channel<T> {
 让我们在消息准备好之前调用 `receive` 方法的问题开始处理。这个问题很容易解决，我们只需要在尝试读消息之前让 receive 方法验证 ready 标识即可：
 
 ```rust
-    /// Panics if no message is available yet.
+    /// 如果仍然没有消息可获得，panic。
     ///
-    /// Tip: Use `is_ready` to check first.
+    /// 提示，首先使用 `is_ready` 检查。
     ///
-    /// Safety: Only call this once!
+    /// 安全地：仅能调用一次。
     pub unsafe fn receive(&self) -> T {
         if !self.ready.load(Acquire) {
             panic!("no message available!");
@@ -176,10 +176,10 @@ impl<T> Channel<T> {
 下一个要解决的问题是，当调用 receive 不止一次时会发生什么。通过在接收者法中将 `ready` 标识设置回 false，我们也可以很容易地导致 panic，例如：
 
 ```rust
-    /// Panics if no message is available yet,
-    /// or if the message was already consumed.
+    /// 如果仍然没有消息可获得，
+    /// 或者消息已经被消费 panic。
     ///
-    /// Tip: Use `is_ready` to check first.
+    /// 提示，首先使用 `is_ready` 检查。
     pub fn receive(&self) -> T {
         if !self.ready.swap(false, Acquire) {
             panic!("no message available!");
@@ -198,7 +198,7 @@ impl<T> Channel<T> {
 ```rust
 pub struct Channel<T> {
     message: UnsafeCell<MaybeUninit<T>>,
-    in_use: AtomicBool, // New!
+    in_use: AtomicBool, // 新增！
     ready: AtomicBool,
 }
 
@@ -206,7 +206,7 @@ impl<T> Channel<T> {
     pub const fn new() -> Self {
         Self {
             message: UnsafeCell::new(MaybeUninit::uninit()),
-            in_use: AtomicBool::new(false), // New!
+            in_use: AtomicBool::new(false), // 新增！
             ready: AtomicBool::new(false),
         }
     }
@@ -218,7 +218,7 @@ impl<T> Channel<T> {
 现在我们需要做的就是在访问 cell 之前，在 send 方法中，将 `in_use` 设置为 true，如果它已经由另一个线程设置，则 panic：
 
 ```rust
-    /// Panics when trying to send more than one message.
+    /// 当尝试发送不止一次消息时，Panic。
     pub fn send(&self, message: T) {
         if self.in_use.swap(true, Relaxed) {
             panic!("can't send more than one message!");
@@ -385,7 +385,7 @@ pub struct Receiver<T> {
     channel: Arc<Channel<T>>,
 }
 
-struct Channel<T> { // no longer `pub`
+struct Channel<T> { // 不再 `pub`
     message: UnsafeCell<MaybeUninit<T>>,
     ready: AtomicBool,
 }
@@ -419,7 +419,7 @@ pub fn channel<T>() -> (Sender<T>, Receiver<T>) {
 
 ```rust
 impl<T> Sender<T> {
-    /// This never panics. :)
+    /// 从不会 panic :)
     pub fn send(self, message: T) {
         unsafe { (*self.channel.message.get()).write(message) };
         self.channel.ready.store(true, Release);
@@ -635,7 +635,7 @@ use std::thread::Thread;
 
 pub struct Sender<'a, T> {
     channel: &'a Channel<T>,
-    receiving_thread: Thread, // New!
+    receiving_thread: Thread, // 新增！
 }
 ```
 
@@ -646,7 +646,7 @@ pub struct Sender<'a, T> {
 ```rust
 pub struct Receiver<'a, T> {
     channel: &'a Channel<T>,
-    _no_send: PhantomData<*const ()>, // New!
+    _no_send: PhantomData<*const ()>, // 新增！
 }
 ```
 
@@ -658,11 +658,11 @@ pub struct Receiver<'a, T> {
         (
             Sender {
                 channel: self,
-                receiving_thread: thread::current(), // New!
+                receiving_thread: thread::current(), // 新增！
             },
             Receiver {
                 channel: self,
-                _no_send: PhantomData, // New!
+                _no_send: PhantomData, // 新增！
             }
         )
     }
@@ -677,7 +677,7 @@ impl<T> Sender<'_, T> {
     pub fn send(self, message: T) {
         unsafe { (*self.channel.message.get()).write(message) };
         self.channel.ready.store(true, Release);
-        self.receiving_thread.unpark(); // New!
+        self.receiving_thread.unpark(); // 新增！
     }
 }
 ```

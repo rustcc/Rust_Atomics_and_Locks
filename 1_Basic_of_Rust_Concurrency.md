@@ -59,7 +59,7 @@ This is my thread id:
 
 在这个特定的示例中，在程序被主线程关闭之前，其中一个新的线程有足够的消息到达第二条消息的一半。
 
-如果我们想要线程在主函数返回之前完成执行，我们可以通过 `join` 它们来等待。未来这样做，我们使用 `spawn` 函数返回的 `JoinHandle`：
+如果我们想要线程在主函数返回之前完成执行，我们可以通过 `join` 它们来等待。为此，我们使用 `spawn` 函数返回的 `JoinHandle`：
 
 ```rust
 fn main() {
@@ -191,7 +191,7 @@ thread::scope(|s| {
         numbers.push(1);
     });
     s.spawn(|| {
-        numbers.push(2); // Error!
+        numbers.push(2); // 报错！
     });
 });
 ```
@@ -272,7 +272,7 @@ use std::rc::Rc;
 let a = Rc::new([1, 2, 3]);
 let b = a.clone();
 
-assert_eq!(a.as_ptr(), b.as_ptr()); // Same allocation!
+assert_eq!(a.as_ptr(), b.as_ptr()); // 相同分配的内存！
 ```
 
 丢弃一个 `Rc` 将递减计数。只有最后一个 `Rc`，计数器下降到 0，才会丢弃且释放分配内存中所包含的数据。
@@ -286,7 +286,7 @@ error[E0277]: `Rc` cannot be sent between threads safely
     |                   ^^^^^^^^^^^^^^^
 ```
 
-事实证明，`Rc` 不是*线程安全*的（详见，[线程安全：Send 和 Sync](#线程安全send-和-sync)）。如果多个线程有相同分配内存的 `Rc`，那么它们可能尝试同时修改引用计数，这可能产生不可预测的结果。
+事实证明，`Rc` 不是*线程安全*的（详见，[线程安全：Send 和 Sync](#线程安全send-和-sync)）。如果多个线程有相同分配内存的 `Rc`，那么它们可能尝试并发修改引用计数，这可能产生不可预测的结果。
 
 然而，我们可以使用 `std::sync::Arc`，它代表“原子引用计数”。它与 `Rc` 相同，只是它保证了对引用计数的修改时不可分割的*原子*操作，因此可以安全地与多个线程使用。（详见第二章。）
 
@@ -443,20 +443,20 @@ fn f(a: &Cell<i32>, b: &Cell<i32>) {
     b.set(b.get() + 1);
     let after = a.get();
     if before != after {
-        x(); // might happen
+        x(); // 可能发生
     }
 }
 ```
 
-与上次不同，现在 if 条件有可能为真。因为 `Cell<i32>` 是内部可变的，只要我们有对它的共享引用，编译器不再假设它的值不再改变。a 和 b 可能引用相同的值，通过 b 也可能影响 a。然而，它可能同时假设没有其它线程同时获取 cell。
+与上次不同，现在 if 条件有可能为真。因为 `Cell<i32>` 是内部可变的，只要我们有对它的共享引用，编译器不再假设它的值不再改变。a 和 b 可能引用相同的值，通过 b 也可能影响 a。然而，它可能假设没有其它线程并发获取 cell。
 
 对 Cell 的限制并不总是容易处理的。因为它不能直接让我们借用它所持有的值，我们需要将值移动出去（让一些东西替换它的位置），修改它，然后将它放回去，以改变它的内容：
 
 ```rust
 fn f(v: &Cell<Vec<i32>>) {
-    let mut v2 = v.take(); // Replaces the contents of the Cell with an empty Vec
+    let mut v2 = v.take(); // 使用空的 Vec 替换 Cell 中的内容
     v2.push(1);
-    v.set(v2); // Put the modified Vec back
+    v.set(v2); // 将修改的 Vec 返回
 }
 ```
 
@@ -470,7 +470,7 @@ fn f(v: &Cell<Vec<i32>>) {
 use std::cell::RefCell;
 
 fn f(v: &RefCell<Vec<i32>>) {
-    v.borrow_mut().push(1); // We can modify the `Vec` directly.
+    v.borrow_mut().push(1); // 我们可以直接修改 `Vec`。
 }
 ```
 
@@ -552,7 +552,7 @@ unsafe impl Sync for X {}
 ```rust
 fn main() {
     let a = Rc::new(123);
-    thread::spawn(move || { // Error!
+    thread::spawn(move || { // 报错！
         dbg!(a);
     });
 }
@@ -635,7 +635,7 @@ fn main() {
                 for _ in 0..100 {
                     *guard += 1;
                 }
-                thread::sleep(Duration::from_secs(1)); // New!
+                thread::sleep(Duration::from_secs(1)); // 新增！
             });
         }
     });
@@ -657,7 +657,7 @@ fn main() {
                 for _ in 0..100 {
                     *guard += 1;
                 }
-                drop(guard); // New: drop the guard before sleeping!
+                drop(guard); // 新增：在睡眠之前丢弃 guard！
                 thread::sleep(Duration::from_secs(1));
             });
         }
@@ -756,7 +756,7 @@ fn main() {
     let queue = Mutex::new(VecDeque::new());
 
     thread::scope(|s| {
-        // Consuming thread
+        // 消费线程
         let t = s.spawn(|| loop {
             let item = queue.lock().unwrap().pop_front();
             if let Some(item) = item {
@@ -766,7 +766,7 @@ fn main() {
             }
         });
 
-        // Producing thread
+        // 产生线程
         for i in 0.. {
             queue.lock().unwrap().push_back(i);
             t.thread().unpark();
@@ -866,7 +866,7 @@ Condvar 的缺点是，它仅能与 Mutex 一起工作，对于大多数用例�
 
 * 多线程可以并发地运行在相同程序并且可以在任意时间生成。
 * 当主线程结束，主程序结束。
-* 数据竞争是未定义行为，它会由 Rust 的类型系统完全地组织（在安全的代码中）。
+* 数据竞争是未定义行为，它会由 Rust 的类型系统完全地阻止（在安全的代码中）。
 * 常规的线程可以像程序运行一样长时间，并且因此只能借用 `'static` 数据。例如静态变量和泄漏分配的内存。
 * 引用计数（Arc）可以用于共享所有权，以确保只要有一个线程使用它，数据就会存在。
 * 作用域线程用于限制线程的生命周期，以允许其借用非 `'static` 数据，例如作用域变量。
