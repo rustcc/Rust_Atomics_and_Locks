@@ -63,7 +63,7 @@
 * [一个不安全的一次性 Channel](./5_Building_Our_Own_Channels.md#一个不安全的一次性-channel)
 * [通过运行时检查来达到安全](./5_Building_Our_Own_Channels.md#通过运行时检查来达到安全)
 * [通过类型来达到安全](./5_Building_Our_Own_Channels.md#通过类型来达到安全)
-* [借用以避免分配](./5_Building_Our_Own_Channels.md#借用以避免分配)
+* [借用以避免内存分配](./5_Building_Our_Own_Channels.md#借用以避免内存分配)
 * [阻塞](./5_Building_Our_Own_Channels.md#阻塞)
 * [总结](./5_Building_Our_Own_Channels.md#总结)
 
@@ -141,6 +141,8 @@
 * [基于阻塞的锁](./10_Ideas_and_Inspiration.md#基于阻塞的锁)
 * [顺序锁](./10_Ideas_and_Inspiration.md#顺序锁sequence-lock)
 * [教学材料](./10_Ideas_and_Inspiration.md#教学材料)
+
+## [索引](./attachment.md)
 
 注明：本文译自 <https://marabos.nl/atomics/>，若其它平台引用此翻译，也请注明出处。
 
