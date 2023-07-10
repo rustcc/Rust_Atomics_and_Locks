@@ -142,7 +142,7 @@
 * [顺序锁](./10_Ideas_and_Inspiration.md#顺序锁sequence-lock)
 * [教学材料](./10_Ideas_and_Inspiration.md#教学材料)
 
-## [索引](./_index.md)
+## [索引](./attachment.md)
 
 注明：本文译自 <https://marabos.nl/atomics/>，若其它平台引用此翻译，也请注明出处。
 
