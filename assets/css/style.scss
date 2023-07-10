@@ -17,6 +17,7 @@
   --dark-color-a: rgba(96, 255, 220, 0.7);
   --dark-color-a-hover: #04fbc5;
   --dark-bg-code: rgb(31, 91, 62);
+  --dark-border-table: var(--dark-bg-code);
   --dark-bg-pre: rgb(45, 43, 85);
   --dark-color-h: rgb(0, 208, 212);
 }
@@ -101,6 +102,12 @@ h6 {
   html,body,.markdown-body {
     background-color: var(--dark-bg-theme);
     color: var(--dark-color-theme);
+  }
+
+  .markdown-body table th,
+  .markdown-body table td{
+    border-color: var(--dark-border-table);
+    background-color: var(--dark-bg-theme);
   }
 
   .markdown-body .highlight,
