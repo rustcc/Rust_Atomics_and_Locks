@@ -41,7 +41,7 @@
   add y, x    # 将 x 加 y
   mul x, 3    # 将 x 乘以 3
   cmp y, 10   # y 与 10 进行比较
-  jne -5      # 如果不等于的话，指令跳转，回退5个指令
+  jne -5      # 如果不等于的话，指令跳转，回退 5 个指令
   str 1234, x # 将 x 存储到内存地址1234处</pre>
 
   <p>这个示例中，x 和 y 是寄存器（<code>register</code>）。寄存器是处理器的一部分，不属于主内存，通常保存单个数值或者内存地址。在 64 位的架构中，它们一般是 64 位的大小。在不同的架构中，寄存器的个数可能是不一样的，但通常个数也是非常有限的。寄存器基本用于计算过程中的临时存储，是将数据写回内存前存放中间结果的地方。</p>
@@ -120,6 +120,96 @@ add_ten:
 ### 加载和存储操作
 
 （<a href="https://marabos.nl/atomics/hardware.html#load-store-ops" target="_blank">英文版本</a>）
+
+在我们深入研究更高级的内容之前，让我们首先看看最基本的原子操作：加载和存储指令。
+
+通过 `&mut i32` 进行的采用的常规非原子指令，在 `x86-64` 和 `ARM64` 上只需要一个指令，如下所示：
+
+<div style="columns: 3;column-gap: 20px;column-rule-color: green;column-rule-style: solid;">
+  <div style="break-inside: avoid">
+    Rust 源码
+    <pre>pub fn a(x: &mut i32) {
+    *x = 0;
+}</pre>
+  </div>
+  <div style="break-inside: avoid">
+    编译的 x86-64
+    <pre>a:
+    mov dword ptr [rdi], 0
+    ret</pre>
+  </div>
+  <div style="break-inside: avoid">
+    编译的 ARM64
+    <pre>a:
+    str wzr, [x0]
+    ret</pre>
+  </div>
+</div>
+
+在 x86-64 上，非常通用的 mov 指令用于将数据从一个地方复制（“移动”）到另一个地方；在这个示例下，是从 0 常数复制到内存。在 ARM64 上，`str`（存储寄存器）指令将一个 32 位寄存器存储到内存中。在这个示例下，使用的是特殊的 wzr 寄存器，它总是包含 0。
+
+如果我们更改代码，而是使用 relaxed 排序的原子操作，我们将得到以下结果：
+
+<div style="columns: 3;column-gap: 20px;column-rule-color: green;column-rule-style: solid;">
+  <div style="break-inside: avoid">
+    Rust 源码
+    <pre>pub fn a(x: &mut i32) {
+    *x = 0;
+}</pre>
+  </div>
+  <div style="break-inside: avoid">
+    编译的 x86-64
+    <pre>a:
+    mov dword ptr [rdi], 0
+    ret</pre>
+  </div>
+  <div style="break-inside: avoid">
+    编译的 ARM64
+    <pre>a:
+    mov dword ptr [rdi], 0
+    ret</pre>
+  </div>
+</div>
+
+或许令人惊讶的是，它的汇编与非原子版本完全相同。事实证明，mov 和 str 指令已经是原子的。它们要么发生，要么它们完全不会发生。显然，在 `&mut i32` 和 `&i32` 之间的任何差异仅对编译器检查和优化有关，但对于处理器是没有意外的——至少对于这两种架构上的 relaxed 的存储操作。
+
+当我们查看 relaxed 的存储操作时，也是相同的：
+
+<div style="columns: 3;column-gap: 20px;column-rule-color: green;column-rule-style: solid;">
+  <div style="break-inside: avoid">
+    Rust 源码
+    <pre>pub fn a(x: &i32) -> i32 {
+    *x
+}</pre>
+   <pre>pub fn a(x: &AtomicI32) -> i32 {
+    x.load(Relaxed)
+}</pre>
+  </div>
+  <div style="break-inside: avoid">
+    编译的 x86-64
+    <pre>a:
+    mov eax, dword ptr [rdi]
+    ret</pre>
+    <pre>a:
+    mov eax, dword ptr [rdi]
+    ret</pre>
+  </div>
+  <div style="break-inside: avoid">
+    编译的 ARM64
+    <pre>a:
+    mov eax, dword ptr [rdi]
+    ret</pre>
+    <pre>a:
+    ldr w0, [x0]
+    ret</pre>
+  </div>
+</div>
+
+在 x86-64 上，mov 指令被再次使用，这次用于从内存中的值复制到 32 位 eax 寄存器。在 ARM64 上，使用 ldr（加载寄存器）指令将内存中的值加载到 w0 寄存器。
+
+> 32 位的 eax 和 w0 寄存器用于返回函数的 32 位返回值。（对于 64 位值，使用 64 位的 rax 和 x0 寄存器。）
+
+尽管处理器没有明显地区别原子和非原子的存储和加载操作之间的不同，但是在我们的 Rust 代码中不能安全地忽视这些区别。如果我们使用一个 `&mut i32`，Rust 编译器可能假设没有其他线程可以并发地访问相同的 i32 类型，并且可能决定以某种方式去转换或者优化代码，使得 store 操作不再导致单个相应的 store 指令。例如，通过使用两个单独的 16 位指令进行非原子的 32 位 load 或 store 操作时非常正确的，尽管有些不寻常。
 
 ### 读、修改、写操作
 
