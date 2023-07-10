@@ -3,7 +3,7 @@
 * [Rust 中的线程](./1_Basic_of_Rust_Concurrency.md#rust-中的线程)
 * [作用域内的线程](./1_Basic_of_Rust_Concurrency.md#作用域内的线程)
 * [共享所有权以及引用计数](./1_Basic_of_Rust_Concurrency.md#共享所有权以及引用计数)
-  * [Static](./1_Basic_of_Rust_Concurrency.md#static)
+  * [静态值](./1_Basic_of_Rust_Concurrency.md#静态值static)
   * [泄漏（Leak）](./1_Basic_of_Rust_Concurrency.md#泄漏leak)
   * [引用计数](./1_Basic_of_Rust_Concurrency.md#引用计数)
 * [借用和数据竞争](./1_Basic_of_Rust_Concurrency.md#借用和数据竞争)

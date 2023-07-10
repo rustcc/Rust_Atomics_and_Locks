@@ -42,7 +42,7 @@
 
 （<a href="https://marabos.nl/atomics/building-locks.html#mutex" target="_blank">英文版本</a>）
 
-在构建 `Mutex<T>` 时，我们将接收来自[第四章](./4_Building_Our_Own_Spin_Lock.md)的 `SpinLock<T>` 类型。在不涉及阻塞的部分，例如守护类型的设计，将保持不变。
+在构建 `Mutex<T>` 时，我们将接收来自[第四章](./4_Building_Our_Own_Spin_Lock.md)的 `SpinLock<T>` 类型。在不涉及阻塞的部分，例如守卫类型的设计，将保持不变。
 
 让我们从类型定义开始。与自旋锁相比，我们必须做一个更改：而不是将 `AtomicBool` 设置为 `false` 或者 `true`，我们将使用 `AtomicU32`，将其设为 0 或者 1，所以我们可以将其与原子等待和唤醒函数一起使用。
 
@@ -99,14 +99,14 @@ impl<T> Mutex<T> {
 
 我们为自旋锁实现的锁（lock）函数，使用了一个原子交换（`swap`）操作以试图去获取锁，如果它成功的将状态从“解锁”更改到“锁定”，则返回。如果未成功，它将立刻再次尝试。
 
-为了锁住我们的 mutex，我们将做几乎相同的操作，除了在再次尝试之前，我们会使用 `wait()` 等待：
+为了锁定我们的 mutex，我们将做几乎相同的操作，除了在再次尝试之前，我们会使用 `wait()` 等待：
 
 ```rust
     pub fn lock(&self) -> MutexGuard<T> {
         // 设置 state 到 1：锁定
         while self.state.swap(1, Acquire) == 1 {
             // 如果它已经锁定..
-            // .. 等待，知道 state 不再是 1。
+            // .. 等待，直到state 不再是 1。
             wait(&self.state, 1);
         }
         MutexGuard { mutex: self }
@@ -142,9 +142,9 @@ impl<T> Drop for MutexGuard<'_, T> {
 
 <div class="box">
   <h2 style="text-align: center;">Lock API</h2>
-  <p>如果你正在计划将实现 Rust 锁当作一个新的爱好，那么你可能很快对涉及提供安全接口的样板代码感到厌烦。也就是说，UnsafeCell、Sync 实现、守护类型、Deref 实现等等。</p>
+  <p>如果你正在计划将实现 Rust 锁当作一个新的爱好，那么你可能很快对涉及提供安全接口的样板代码感到厌烦。也就是说，UnsafeCell、Sync 实现、守卫类型、Deref 实现等等。</p>
 
-  <p>crate.io 上的 <code>lock_api</code> 可以自动地去处理这些事情。你仅需要制作一个锁定状态的类型，并通过（不安全）<code>lock_api::RawMutex</code> trait 提供（不安全）锁定和解锁功能。<code>lock_api::Mutex</code> 类型将根据你的锁实现，提供一个完全安全的和符合人体工学的 mutex 类型作为返回，包括 mutex 守护。</p>
+  <p>crate.io 上的 <code>lock_api</code> 可以自动地去处理这些事情。你仅需要制作一个锁定状态的类型，并通过（不安全）<code>lock_api::RawMutex</code> trait 提供（不安全）锁定和解锁功能。<code>lock_api::Mutex</code> 类型将根据你的锁实现，提供一个完全安全的和符合人体工学的 mutex 类型作为返回，包括 mutex 守卫。</p>
 </div>
 
 ### 避免系统调用
@@ -202,7 +202,7 @@ impl<T> Drop for MutexGuard<'_, T> {
 
 图 9-1 展示了两个线程同时尝试锁定我们的 mutex 操作的情况下的 happens-before 关系。首先线程通过改变状态从 0 到 1 锁定 mutex。此时，第二个线程将无法获取锁，并且在改变状态从 1 到 2 后进入睡眠。当第一个线程解锁 mutex 时，它会交换状态回 0。因为是 2，表示一个等待线程，它调用 `wake_one()` 来唤醒第二个线程。注意，我们不能依赖于唤醒和等待操作之间的任何 happens-before 关系。虽然唤醒操作可能是负责唤醒等待线程的操作，但 happens-before 关系是通过 `acquire` 交换操作建立的，观察 `release` 交换操作存储的值。
 
-![ ](https://github.com/fwqaaq/Rust_Atomics_and_Locks/raw/main/picture/raal_0901.png)
+![ ](https://github.com/rustcc/Rust_Atomics_and_Locks/raw/main/picture/raal_0901.png)
 *图 9-1。两个线程之间 happens-before 的关系同时试图锁定我们的 mutex。*
 
 ### 进一步优化
@@ -288,7 +288,7 @@ fn lock_contended(state: &AtomicU32) {
 
 我们将试图去写两个简单的基础测试，表明我们的优化至少对一些用例产生了一些积极影响，但请注意，任何结论在不同场景都不一定成立。
 
-在我们的第一次测试中，我们将创建一个 Mutex 并锁定和解锁它几百万次，所有都在同一线程上，以测量它花费总的时间。这是对琐碎未讨论场景的测试，其中从来没有任何需要唤醒的线程。希望这将向我们展示 2-state 和 3-state 版本的差异。
+在我们的第一次测试中，我们将创建一个 Mutex 并锁定和解锁它几百万次，所有都在同一线程上，以测量它花费总的时间。这是对琐碎未讨论场景的测试，其中从来没有任何需要唤醒的线程。希望这将向我们展示 2 个 state 和 3 个 state 版本的差异。
 
 ```rust
 fn main() {
@@ -305,7 +305,7 @@ fn main() {
 
 > 我们使用 `std::hint::black_box`（像我们在[第七章“对性能的影响”](./7_Understanding_the_Processor.md#对性能的影响)）去强制编译器假设有更多的代码去访问 mutex，阻止它优化循环或者锁定操作。
 
-结果因硬件和操作系统不同而不同。在一台配备最新 AMD 处理器的特定 Linux 计算机上尝试，对于我们为优化的 2-state mutex 花费时间大约 400ms，对于我们优化过后的 3-state mutex 大约 40ms。一个因素获得十倍的性能提升！在另一个有着老式 Intel 处理器 Linux 计算机中，差异甚至更大：大约 1800ms 比上 60ms。这证实了，第三个状态的加入确实是一个非常大的优化。
+结果因硬件和操作系统不同而不同。在一台配备最新 AMD 处理器的特定 Linux 计算机上尝试，对于我们为优化的 2 个 state 的 mutex 花费时间大约 400ms，对于我们优化过后的 3 个 state 的 mutex 大约 40ms。一个因素获得十倍的性能提升！在另一个有着老式 Intel 处理器 Linux 计算机中，差异甚至更大：大约 1800ms 比上 60ms。这证实了，第三个状态的加入确实是一个非常大的优化。
 
 然而，在 macOS 上运行，这回产生一个完全不同的结果：这两个版本大约都是 50ms，这展示了非常高的平台依赖。
 
@@ -313,7 +313,7 @@ fn main() {
 
 避免调用这些函数仍然可能带来稍微更好的性能，因为它们的实现并非是微不足道的，尤其因为它们并不能在原子变量本身中存储任何信息。然而，如果我们的目标仅针对这些操作系统，我们将质疑在我们的 mutex 中**增加**第三个状态是否是值得的。
 
-为了看看我们的自旋优化是否有任何积极的影响，我们需要一个不同的基准测试：一个有着大量争用的测试，多个线程反复尝试去锁定一个已经上锁的 mutex。
+为了看看我们的自旋优化是否有任何积极的影响，我们需要一个不同的基准测试：一个有着大量竞争的测试，多个线程反复尝试去锁定一个已经上锁的 mutex。
 
 让我们尝试一个场景，四个线程都尝试锁定和解锁 mutex 上万次：
 
@@ -424,7 +424,7 @@ impl Condvar {
 
 图 9-2 展示了操作和 happens-before 关系，在这种情况下，一个线程使用 `Condvar::wait()` 等待一些受 mutex 保护的数据更改，并由第二个线程唤醒，该线程修改数据并且调用 `Condvar::wake_one()`。注意，由于解锁和锁定操作，第一次加载操作能够保证观察到递增之前到值。
 
-![ ](https://github.com/fwqaaq/Rust_Atomics_and_Locks/raw/main/picture/raal_0902.png)
+![ ](https://github.com/rustcc/Rust_Atomics_and_Locks/raw/main/picture/raal_0902.png)
 *图 9-2。一个线程使用 `Condvar::wait()` 被另一个使用 `Condvar::notify_one()` 的线程唤醒的操作和 happens-before 的关系。*
 
 我们应该也考虑如果 counter 溢出会发生什么。

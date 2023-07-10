@@ -65,7 +65,7 @@ impl SpinLock {
 
 图 4-1 展示了使用 `SpinLock` 来保护对一些共享数据的访问情况，其中两个线程同时尝试获取锁。请注意，第一个线程上的解锁操作与第二个线程上的锁定操作形成 happens-before 关系，这确保了线程不能并发地访问数据。
 
-![ ](https://github.com/fwqaaq/Rust_Atomics_and_Locks/raw/main/picture/raal_0401.png)
+![ ](https://github.com/rustcc/Rust_Atomics_and_Locks/raw/main/picture/raal_0401.png)
 图 4-1。在使用 `SpinLock` 保护对某些共享数据访问的两个线程之间的 happens-before 关系。
 
 ## 一个不安全的自旋锁
@@ -131,7 +131,7 @@ impl<T> SpinLock<T> {
 
 如果我们假装 `unlock()` 不存在，这将是完全安全和健全的接口。SpinLock 可以被锁定，导致一个 `&mut T`，并且然后不再被再次锁定，这保证了这个独占引用确实是独占的。
 
-然而，如果我们尝试重新**增加** `unlock()` 方法，我们需要一种方式去限制返回引用的生命周期，知道下一次调用 `unlock()`。如果编译器理解英语，或者它应该这样工作：
+然而，如果我们尝试重新**增加** `unlock()` 方法，我们需要一种方式去限制返回引用的生命周期，直到下一次调用 `unlock()`。如果编译器理解英语，或者它应该这样工作：
 
 ```rust
 pub fn lock<'a>(&self) -> &'a mut T
