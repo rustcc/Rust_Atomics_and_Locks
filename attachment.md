@@ -39,6 +39,7 @@
 | sender               | 发送者         | 5      |
 | spurious             | 虚假的         | 1、2、5、8、9       |
 | static               | 静态值         | 1                   |
+| stop the world       | 停止其他活动    | 7      |
 | syscall              | 系统调用       | 8、9                |
 | unlock（v）          | 解锁           | all                 |
 | unpark               | 释放           | all                 |

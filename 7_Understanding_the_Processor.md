@@ -244,25 +244,243 @@ add_ten:
 
 尽管不能从汇编本身直接明显地看出，但 x86-64 版本并不是原子的。`add` 指令将由处理器在幕后分割成几个指令，分别的步骤为加载值和存储结果。在单核计算机中，这是无关紧要的，因为在指令之间切换处理器核心仅在线程之间发生。然而，当多个核心并行执行指令，我们在不考虑执行单个指令设计的多个步骤的情况下，就不能假设所有指令都以原子地方式发生。
 
-#### x86 锁前缀
+#### x86 lock 前缀
 
 （<a href="https://marabos.nl/atomics/hardware.html#lock-prefix" target="_blank">英文版本</a>）
+
+为了支持多核系统，英特尔引入了一个称为 `lock` 的处理器前缀。它被用于像 `add` 这样的指令修饰符，以使它们的操作变得原子化。
+
+lock 前缀最初是会导致处理器在指令执行期间，临时阻止所有其他核心访问内存。尽管这是一个简单和有效的方式，可以使在其他的核心看来像原子操作，但每次原子操作都停止其他活动（stop the world）是非常低效的。新的处理器对 lock 前缀的处理方式有更先进的 lock 前缀实现，它们并不会停止其他核心处理不相关的内存，并且允许核心在等待某块内存变得可获得期间，继续做有用的事情。
+
+lock 前缀只能应用于非常有限数量的指令，包括 add、sub、and、or 以及 xor，这些都是非常有用的、能够以原子方式完成的操作。`xchg`（exchange）指令对英语原子交换操作，有一个隐式的 lock 前缀：无论 lock 前缀如何，它的行为都像 lock xchg/
+
+让我们通过改变我们的最后一个示例来操作 AtomicI32，看看 lock add 的操作：
+
+<div style="columns: 3;column-gap: 20px;column-rule-color: green;column-rule-style: solid;">
+  <div style="break-inside: avoid">
+    Rust 源码
+    <pre>pub fn a(x: &AtomicI32) {
+    x.fetch_add(10, Relaxed);
+}</pre>
+  </div>
+  <div style="break-inside: avoid">
+    编译的 x86-64
+    <pre>a:
+    lock add dword ptr [rdi], 10
+    ret</pre>
+  </div>
+</div>
+
+正如预期的那样，与非原子版本唯一的区别就是 lock 前缀。
+
+在上面的示例中，我们忽略了 fetch_add 返回的值，也就是操作之前 x 的值。然而，如果我们使用了这个值，add 指令就不够用了。add 指令可以向之后的指令提供一点有用的信息，比如更新后的值是否为零或负数，但它并未提供完整的（原始或更新的）值。相反，可以使用另一个指令：`xadd`（“交换并添加”），它将原来加载的值放入一个寄存器。
+
+我们可以通过对我们的代码做一个小修改，使其返回 fetch_add 返回的值，来看到它的实际效果：
+
+<div style="columns: 3;column-gap: 20px;column-rule-color: green;column-rule-style: solid;">
+  <div style="break-inside: avoid">
+    Rust 源码
+    <pre>pub fn a(x: &AtomicI32) -> i32 {
+    x.fetch_add(10, Relaxed);
+}</pre>
+  </div>
+  <div style="break-inside: avoid">
+    编译的 x86-64
+    <pre>a:
+    mov eax, 10
+    lock xadd dword ptr [rdi], eax
+    ret</pre>
+  </div>
+</div>
+
+现在使用一个包含 10 的寄存器，而不是常量 10。xadd 指令将重用该寄存器以存储旧值。
+
+不幸的是，除了 xadd 和 xchg，其他可以加 lock 前缀的指令（例如 sub、and 以及 or）都没有这样的变体。例如，没有 xsub 指令。对于减法，这不是问题，因为 xadd 可以使用负数值。然而，对于 and 和 or 没有这样的替代方案。
+
+对于 and、or 以及 xor 操作，只影响单个比特位，如 `fetch_or(1)` 或者 `fetch_and(1)`，可以使用 bts（比特测试和设置）、btr（比特测试和复位）以及 btc（比特测试和补码）指令。这些指令也允许一个 lock 前缀，只改变一个比特位，并且使该比特位的前一个值对后续的指令可用，如条件跳转。
+
+当这些操作影响多个比特位，它们不能由单个 x86-64 指令表示。类似地，fetch_max 和 fetch_min 操作也没有相应的 x86-64 指令。对于这些操作，我们需要一个不同与简单 lock 前缀的策略。
 
 #### x86 比较并交换指令
 
 （<a href="https://marabos.nl/atomics/hardware.html#x86-cas" target="_blank">英文版本</a>）
 
+在[第二章“比较并交换操作”](./2_Atomics.md#比较并交换操作)中，我们看到任何原子「获取并修改」操作都可以实现为一个「比较并交换」循环。对于由单个 x86-63 指令表示的操作，编译器可以使用这种方式，因为该架构确实包含一个（lock 前缀）的 cmpxcchg（比较并交换）指令。
+
+我们可以通过将最后一个示例从 fetch_add 更改为 fetch_or 来在操作中看到这一点：
+
+<div style="columns: 3;column-gap: 20px;column-rule-color: green;column-rule-style: solid;">
+  <div style="break-inside: avoid">
+    Rust 源码
+    <pre>pub fn a(x: &AtomicI32) -> i32 {
+    x.fetch_or(10, Relaxed)
+}</pre>
+  </div>
+  <div style="break-inside: avoid">
+    编译的 x86-64
+    <pre>a:
+    mov eax, dword ptr [rdi]
+.L1:
+    mov ecx, eax
+    or ecx, 10
+    lock cmpxchg dword ptr [rdi], ecx
+    jne .L1
+    ret</pre>
+  </div>
+</div>
+
+第一条 mov 指令从原子变量加载值到 eax 寄存器。以下 mov 和 or 指令是将该值复制到 ecx 和应用二进制或操作，以至于 eax 包含旧值，ecx 包含新值。紧随之后的 cmpxchg 指令行为完全类似于 Rust 中 `compare_exchange` 方法。它的第一个参数是要操作的内存地址（原子变量），第二个参数（ecx）是新值，期望的值隐式地从 eax 取出，并且返回值隐式地存储在 eax 中。它还设置了一个状态标识，后续的指令可以用根据操作是否成功，来有条件的进行分支跳转。在这种情况下，使用 jne（如果与期待值不等则跳转）指令跳回 `.L1` 标签，在失败时再次尝试。
+
+以下是 Rust 中等效的「比较并交换」循环的样子，就像我们在[第2章的“比较和交换操作”](./2_Atomics.md#比较并交换操作)中看到的那样：
+
+```rust
+pub fn a(x: &AtomicI32) -> i32 {
+    let mut current = x.load(Relaxed);
+    loop {
+        let new = current | 10;
+        match x.compare_exchange(current, new, Relaxed, Relaxed) {
+            Ok(v) => return v,
+            Err(v) => current = v,
+        }
+    }
+}
+```
+
+编译此代码会导致与 `fetch_or` 版本完全相同的汇编。这表明，至少在 x86-64 上，它们在各方面确实都是相等的。
+
+> 在 x86_64，在 compare_exchange 和 compare_exchange_weak 之间是有没有区别的。两者都编译为 lock cmpxchg 指令。
+
 ### LL 和 SC 指令
 
 （<a href="https://marabos.nl/atomics/hardware.html#load-linked-and-store-conditional-instructions" target="_blank">英文版本</a>）
+
+在 RISC 架构上最接近「比较并交换」循环的是 *load-linked/store-conditional*（LL/SC）循环。它包括两个特殊的指令，这两个指令成对出现：LL 指令的行为更像常规的 load 指令；SC 指令，其行为更像常规的 store 指令。它们都成对的使用，两个指令都针对同一个内存地址。与常规的 load 和 store 指令的主要区别是 store 是有条件的：如果自从 LL 指令以来任何其他线程已经覆盖了该内存，它就会拒绝存储到内存。
+
+这两条指令允许我们从内存加载一个值，修改它，并只有在仅在没有人从我们加载它以来覆盖该值的情况下，才将新值存回。如果失败，我们可以简单地重试。一旦成功，我们可以安全地假装整个操作是原子的，因为它没有被打断。
+
+使这些指令可行且高效的关键有两点：（1）一次只能追踪一个内存地址（每个核心），（2）存储条件允许有伪阴性[^2]，意味着即使没有任何东西改变这个特定的内存片段，它也可能失败存储。
+
+这使得可以在跟踪内存更改时不那么精确，但可能需要通过 LL/SC 循环额外花几个周期。访问内存的跟踪可以不按字节，而是按 64 字节的分块，或者按千字节，甚至整个内存作为一个整体。不够精确的内存跟踪导致更多不必要的 LL/SC 循环，显著降低性能，但也降低了实现的复杂性。
+
+采用一个极端的想法，一个基本的、假设的单核系统可以使用一种策略，即完全不跟踪对内存的写入。相反，它可以跟踪中断或上下文切换，这些事件可以导致处理器切换到另一个线程。如果在一个没有任何并行性的系统中，没有发生这样的事件，它可以安全地假设没有其他线程可能触及到内存。如果发生了这样的事件，它可以仅假设最糟糕的情况，拒绝存储，并希望在循环的下一次迭代中有更好的运气。
 
 #### ARM 的 ldxr 和 stxr 指令
 
 （<a href="https://marabos.nl/atomics/hardware.html#arm-load-exclusive-and-store-exclusive" target="_blank">英文版本</a>）
 
-#### ARM 的「比较和交换操作」
+在 ARM64 中，或者至少是 ARMv8 的第一个版本，没有任何原子「获取并修改」或者「比较并交换」操作可以通过单个指令表示。对于 RISC 的性质，load 和 store 步骤与计算和比较是分离的。
+
+ARM64 的 LL 和 SC 指令被称为 ldxr（加载独占寄存器）和 stxr（存储独占寄存器）。此外，clrex（清理独占）指令可以用作停止跟踪对内存的写入，而不存储任何东西的 stxr 替代。
+
+为了看到它们的实际效果，让我们看看在 ARM64 上进行原子加时会发生什么：
+
+<div style="columns: 3;column-gap: 20px;column-rule-color: green;column-rule-style: solid;">
+  <div style="break-inside: avoid">
+    Rust 源码
+    <pre>pub fn a(x: &AtomicI32) {
+    x.fetch_add(10, Relaxed);
+}</pre>
+  </div>
+  <div style="break-inside: avoid">
+    编译的 ARM64
+    <pre>a:
+    mov eax, dword ptr [rdi]
+.L1:
+    ldxr w8, [x0]
+    add w9, w8, #10
+    stxr w10, w9, [x0]
+    cbnz w10, .L1
+    ret</pre>
+  </div>
+</div>
+
+我们得到的东西看起来非常类似于我们之前得到的非原子版本（在[“读并修改并写操作”](#读并修改并写操作)）：一个 load 指令、一个 add 指令以及一个 store 指令。load 和 store 指令已经被替换为它们的“独占”LL/SC 版本，并且出现一个新的 cbnz（非 0 比较和分支）指令。如果成功，stxr 指令在 w10 存储一个 0，如果失败，则存储 1。cbnz 指令利用这点，如果操作失败，则重启整个操作。
+
+注意，与 x86-64 上的 lock add 不同，我们不需要做任何特殊的处理检索旧值。在以上示例中，操作成功后，旧值将仍然在寄存器 w8 可获得，所以并不需要相 xadd 这样的特殊指令。
+
+这钟 LL/SC 模式是非常灵活的：它不仅可以用于像 add 和 or 这样有限的操作集，而是可以用于几乎任何操作。我们可以通过在 ldxr 和 stxr 指令之间放入相应的指令，轻松地实现原子 fetch_divide 或 fetch_shift_left 操作。然而，如果它们之间有太多的指令，中断的几率就会越来越高，导致额外的周期。通常，编译器会尝试在 LL/SC 模式中的指令数量尽可能少，防止 LL/SC 循环频繁失败可能从不成功，并且以及可能无限自旋的情况。
+
+<div class="box">
+  <h2 style="text-align: center;">ARMv8.1 原子指令</h2>
+  <p>ARMv8.1 的后续版本 ARM64，还包括新的 CISC 风格指令，用于常见的原子操作。例如，新的 ldadd（加载并添加）指令等效于一个原子 fetch_add 操作，无需使用 LL/SC 循环。它甚至包括像 fetch_max 这样的操作指令，这在 x86-64 上并不存在。</p>
+
+  <p>它还包括一个与 <code>com⁠pare_​exchange</code> 相对应的 cas（比较并交换）指令。当使用此指令时，<code>compare_exchange</code> 和 <code>compare_exchange_weak</code> 之间没有差别，就像在 x86-64 上一样。</p>
+
+  <code>尽管 LL/SC 模式非常灵活，并且很好地适应了一般的 RISC 模式，但这些新指令可以更高效，因为它们可以通过特定的硬件进行更轻松的优化。</code>
+</div>
+
+#### ARM 的「比较和交换」操作
 
 （<a href="https://marabos.nl/atomics/hardware.html#compare-and-exchange-on-arm" target="_blank">英文版本</a>）
+
+`compare_exchange` 操作通过使用条件分支指令在比较失败时跳过 store 指令，这与 LL/LC 模式的映射非常恰当。让我们来看看生成汇编的代码：
+
+<div style="columns: 3;column-gap: 20px;column-rule-color: green;column-rule-style: solid;">
+  <div style="break-inside: avoid">
+    Rust 源码
+    <pre>pub fn a(x: &AtomicI32) {
+    x.compare_exchange_weak(5, 6, Relaxed, Relaxed);
+}</pre>
+  </div>
+  <div style="break-inside: avoid">
+    编译的 ARM64
+    <pre>a:
+    ldxr w8, [x0]
+    cmp w8, #5
+    b.ne .L1
+    mov w8, #6
+    stxr w9, w8, [x0]
+    ret
+.L1:
+    clrex
+    ret</pre>
+  </div>
+</div>
+
+> 注意，compare_and_exchange 操作通常用于一个循环，如果该比较失败，则循环重复。然而，对于该示例，我们仅调用一次并且忽略它的返回值，这让我们在无干扰的情况下查看汇编。
+
+ldxr 指令加载了值，然后立即通过 cmp（比较）指令将其与预期的值 5 进行比较。如果值不符合预期，`b.ne`（如果与预期值不等则跳转分支）指令会导致跳转到 `.L1` 标签，在此刻，clrex 指令用于中止 LL/SC 模式。如果值是 5，流程将通过 mov 和 stxr 指令继续，将新的值 6 存储到内存中，但这只会在与此同时没有任何东西覆盖 5 的情况下发生。
+
+请记住，stxr 允许有伪阴性；即使 5 没有被覆盖，这里也可能失败。这没问题，因为我们正在使用 `compare_exchange_weak`，它也允许有伪阴性。事实上，这就是为什么存在 `compare_exchange` 的 weak 版本。
+
+如果我们将 `compare_exchange_weak` 替换为 `compare_exchange`，我们得到的汇编代码几乎完全相同，除了在操作失败时会有额外的分支来重新启动操作：
+
+<div style="columns: 3;column-gap: 20px;column-rule-color: green;column-rule-style: solid;">
+  <div style="break-inside: avoid">
+    Rust 源码
+    <pre>pub fn a(x: &AtomicI32) {
+    x.compare_exchange(5, 6, Relaxed, Relaxed);
+}</pre>
+  </div>
+  <div style="break-inside: avoid">
+    编译的 ARM64
+    <pre>a:
+    mov w8, #6
+.L1:
+    ldxr w9, [x0]
+    cmp w9, #5
+    b.ne .L2
+    stxr w9, w8, [x0]
+    cbnz w9, .L1
+    ret
+.L2:
+    clrex
+    ret</pre>
+  </div>
+</div>
+
+正如预期的那样，现在有一个额外的 cbnz（非 0 的比较和分支）指令，在失败时去重新开始 LL/LC 循环。此外，mov 指令已经移出循环，以保证循环尽可能地短。
+
+<div class="box">
+  <h2 style="text-align: center;">「比较并交换」循环的优化</h2>
+  <p><a>正如我们在<a href="#x86-比较并交换指令">x86-比较并交换指令</a>中看到的，在 x86-64 上，<code>fetch_or</code> 操作和等效的 <code>compare_exchange</code> 循环编译成了完全相同的指令。人们可能期望在 ARM 上也会发生同样的情况，至少在 <code>compare_exchange_weak</code> 上，因为加载和「弱比较并交换」操作可以直接映射到 LL/SC 指令。</a></p>
+
+  <p>不幸的是，当前（截至 Rust 1.66.0）的情况并非如此。</p>
+
+  <p>虽然随着编译器的不断改进，这种情况可能会在未来发生变化，但编译器要安全地将手动编写的「比较并交换」循环转化为相应的 LL/SC 循环还是相当困难的。其中一个原因是，可以放在 stxr 和 ldxr 指令之间的指令的数量和类型是有限的，这不是编译器在应用其他优化时需要考虑的内容。在像「比较并交换」这样的模式还可以识别时，表达式将编译成的确切指令还不清楚，这使得对于一般情况来说，这是一个非常棘手的优化问题。</p>
+
+  <p>因此，直到在我们有更聪明的编译器之前，如果可能的话，建议使用专用的「获取并修改」方法，而不是「比较并交换」循环。</p>
+</div>
 
 ## 缓存
 
@@ -312,6 +530,28 @@ add_ten:
 
 （<a href="https://marabos.nl/atomics/hardware.html#summary" target="_blank">英文版本</a>）
 
+* 在 x86-64 和 ARM64 中，relaxed load 和 store 操作与它们的非原子版本等同。
+* 常见的原子「获取并修改」和「比较并交换」操作在 x86-64（以及从 ARM8.1 开始的 ARM64）上有它们自己的指令。
+* 在 x86-64 中，对于等效的指令原子操作会编译到「比较并交换」循环。
+* 在 ARM64 中，任意ID原子操作都可以通过 ll/sc 指令循环表示：如果试图的内存操作被中断，循环会自动重新开始。
+* 缓存的操作时缓存行，一般是 64 字节。
+* 缓存使用缓存一致性协议保持一致，例如通过写入或者 MESI。
+* 填充可以通过防止伪共享[^1]来提高性能，例如通过 `#[repr(align(64)]`。
+* load 操作可能比失败的「比较并交换」操作要便宜得多，部分原因是后者通常需要对缓存行进行独占访问。
+* 指令重排序在单线程程序内部是不可见的。
+* 在大多数架构上，包括 x86-64 和 ARM64，内存排序是为了防止某些类型的指令重排。
+* 在 x86-64 上，每个内存操作都具有 acquire 和 release 语义，使其与 relaxed 操作一样便宜或昂贵。除存储和屏障外的所有其他操作也具有顺序一致的语义，无需额外成本。
+* 在 ARM64 上，acquire 和 release 语义不如 relaxed 操作便宜，但也包括顺序一致（例如，SeqCst）语义，无需额外成本。
+
+我们在本章节可以看见的汇编指令的总结可以在图 7-1 找到。
+
+![ ](./picture/raal_0701.svg)
+
+图 7-1。各种原子操作在 ARM64 和 x86-64 上编译为每个内存排序的指令概述。
+
 <p style="text-align: center; padding-block-start: 5rem;">
   <a href="./8_Operating_System_Primitives.html">下一篇，第八章：操作系统原语</a>
 </p>
+
+[^1]: <https://zh.wikipedia.org/wiki/伪共享>
+[^2]: <https://zh.wikipedia.org/zh-cn/偽陽性和偽陰性>
