@@ -81,9 +81,9 @@
 
 * [处理器指令](./7_Understanding_the_Processor.md#处理器指令)
   * [加载和存储操作](./7_Understanding_the_Processor.md#加载和存储操作)
-  * [读、修改、写操作](./7_Understanding_the_Processor.md#读修改写操作)
+  * [读并修改并写操作](./7_Understanding_the_Processor.md#读并修改并写操作)
     * [x86 锁前缀](./7_Understanding_the_Processor.md#x86-锁前缀)
-    * [x86 比较和交换指令](./7_Understanding_the_Processor.md#x86-比较和交换指令)
+    * [x86 比较并交换指令](./7_Understanding_the_Processor.md#x86-比较并交换指令)
   * [ll-和-sc-指令](./7_Understanding_the_Processor.md#ll-和-sc-指令)
     * [arm-的-ldxr-和-stxr-指令](./7_Understanding_the_Processor.md#arm-的-ldxr-和-stxr-指令)
     * [arm-的比较和交换操作](./7_Understanding_the_Processor.md#arm-的比较和交换操作)

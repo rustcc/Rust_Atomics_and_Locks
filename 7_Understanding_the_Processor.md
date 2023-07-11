@@ -171,9 +171,9 @@ add_ten:
   </div>
 </div>
 
-或许令人惊讶的是，它的汇编与非原子版本完全相同。事实证明，mov 和 str 指令已经是原子的。它们要么发生，要么它们完全不会发生。显然，在 `&mut i32` 和 `&i32` 之间的任何差异仅对编译器检查和优化有关，但对于处理器是没有意外的——至少对于这两种架构上的 relaxed 的存储操作。
+或许令人惊讶的是，它的汇编与非原子版本完全相同。事实证明，mov 和 str 指令已经是原子的。它们要么发生，要么它们完全不会发生。显然，在 `&mut i32` 和 `&i32` 之间的任何差异仅对编译器检查和优化有关，但对于处理器是没有意外的——至少对于这两种架构上的 relaxed store 操作。
 
-当我们查看 relaxed 的存储操作时，也是相同的：
+当我们查看 relaxed store 操作时，也是相同的：
 
 <div style="columns: 3;column-gap: 20px;column-rule-color: green;column-rule-style: solid;">
   <div style="break-inside: avoid">
@@ -209,17 +209,46 @@ add_ten:
 
 > 32 位的 eax 和 w0 寄存器用于返回函数的 32 位返回值。（对于 64 位值，使用 64 位的 rax 和 x0 寄存器。）
 
-尽管处理器没有明显地区别原子和非原子的存储和加载操作之间的不同，但是在我们的 Rust 代码中不能安全地忽视这些区别。如果我们使用一个 `&mut i32`，Rust 编译器可能假设没有其他线程可以并发地访问相同的 i32 类型，并且可能决定以某种方式去转换或者优化代码，使得 store 操作不再导致单个相应的 store 指令。例如，通过使用两个单独的 16 位指令进行非原子的 32 位 load 或 store 操作时非常正确的，尽管有些不寻常。
+尽管处理器没有明显地区别原子和非原子的 store 和 load 操作之间的不同，但是在我们的 Rust 代码中不能安全地忽视这些区别。如果我们使用一个 `&mut i32`，Rust 编译器可能假设没有其他线程可以并发地访问相同的 i32 类型，并且可能决定以某种方式去转换或者优化代码，使得 store 操作不再导致单个相应的 store 指令。例如，通过使用两个单独的 16 位指令进行非原子的 32 位 load 或 store 操作时非常正确的，尽管有些不寻常。
 
-### 读、修改、写操作
+### 读并修改并写操作
 
-（<a href="https://marabos.nl/atomics/hardware.html#rmw-ops" target="_blank">英文版本</a>）
+（<a href="https://marabos.nl/atomics/hardware.html#rmw-ops" target="_blank">英文版本</a>
+
+对于*读并修改并写操作*来说，事情将变得更加有趣。正如本章早期讨论的那样，在类似 ARM64 的 RISC 架构中，非原子的读并修改并写操作通常编译为三个分开的指令（读、修改以及写），但在类似 x86-64 的 CISC 架构中，通常编译为一个单独的指令。这个简短的示例如下：
+
+<div style="columns: 3;column-gap: 20px;column-rule-color: green;column-rule-style: solid;">
+  <div style="break-inside: avoid">
+    Rust 源码
+    <pre>pub fn a(x: &mut i32) {
+    *x += 10;
+}</pre>
+  </div>
+  <div style="break-inside: avoid">
+    编译的 x86-64
+    <pre>a:
+    add dword ptr [rdi], 10
+    ret</pre>
+  </div>
+  <div style="break-inside: avoid">
+    编译的 ARM64
+    <pre>a:
+    ldr w8, [x0]
+    add w8, w8, #10
+    str w8, [x0]
+    ret</pre>
+  </div>
+</div>
+
+我们甚至可以在查看相应的原子操作之前，合理的假设这次会看到一个非原子和原子版本之间的区别。ARM64 版本显然不是原子的，因为它的 load 和 store 操作发生在不同的步骤中。
+
+尽管不能从汇编本身直接明显地看出，但 x86-64 版本并不是原子的。`add` 指令将由处理器在幕后分割成几个指令，分别的步骤为加载值和存储结果。在单核计算机中，这是无关紧要的，因为在指令之间切换处理器核心仅在线程之间发生。然而，当多个核心并行执行指令，我们在不考虑执行单个指令设计的多个步骤的情况下，就不能假设所有指令都以原子地方式发生。
 
 #### x86 锁前缀
 
 （<a href="https://marabos.nl/atomics/hardware.html#lock-prefix" target="_blank">英文版本</a>）
 
-#### x86 比较和交换指令
+#### x86 比较并交换指令
 
 （<a href="https://marabos.nl/atomics/hardware.html#x86-cas" target="_blank">英文版本</a>）
 
