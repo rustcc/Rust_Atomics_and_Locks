@@ -244,7 +244,7 @@ fn main() {
         DATA.store(123, Relaxed);
         READY.store(true, Release); // 在这个 store 之前的所有操作都会在这个 store 操作之后可见
     });
-    while !READY.load(Acquire) { // READY 的值变为 true，表示前面的存储操作对于其他线程可见
+    while !READY.load(Acquire) { // READY 的值变为 true，表示前面的 load 操作对于其他线程可见
         thread::sleep(Duration::from_millis(100));
         println!("waiting...");
     }
@@ -277,7 +277,7 @@ fn main() {
         unsafe { DATA = 123 };
         READY.store(true, Release); // 在这个 store 之前的所有操作都会在这个 store 操作之后可见
     });
-    while !READY.load(Acquire) { // READY 的值变为 true，表示前面的存储操作对于其他线程可见
+    while !READY.load(Acquire) { // READY 的值变为 true，表示前面的 store 操作对于其他线程可见
         thread::sleep(Duration::from_millis(100));
         println!("waiting...");
     }
@@ -501,7 +501,7 @@ fn main() {
 
 如果两个 store 操作都发生在任一 load 操作之前，则两个线程最终都无法访问 S。然而，两个线程都不可能访问 S 并导致未定义的行为，因为顺序一致的顺序保证了其中只有一个线程可以赢得竞争。在每个可能的单个总的顺序中，第一个操作将是 store 操作，这阻止其他线程访问 S。
 
-在实际情况中，几乎所有对 SeqCst 的使用都涉及一种类似的存储模式，存储操作在随后同一线程上的加载操作之前必须成为全局可见的。对于这些情况，一个潜在的更有效的替代方案是将 relaxed 的操作与 SeqCst 屏障结合使用，我们接下来将探索。
+在实际情况中，几乎所有对 SeqCst 的使用都涉及一种类似的存储模式， store 操作在随后同一线程上的 load 操作之前必须成为全局可见的。对于这些情况，一个潜在的更有效的替代方案是将 relaxed 的操作与 SeqCst 屏障结合使用，我们接下来将探索。
 
 ## 屏障（Fence）[^2]
 
@@ -544,7 +544,7 @@ fn main() {
 
 综上所述，这意味着如果在 release 屏障之后的任何 store 操作被在 acquire 屏障之前的任何 load 操作所观察，那么在 release 屏障和 acquire 屏障之间将建立 happens-before 关系。
 
-例如，假设我们有一个线程执行一个 release 屏障，然后对不同的变量执行三个原子 store 操作，另一个线程从这些相同的变量执行三个 load 操作，然后是一个 acquire 栅栏，如下所示：
+例如，假设我们有一个线程执行一个 release 屏障，然后对不同的变量执行三个原子 store 操作，另一个线程从这些相同的变量执行三个 load 操作，然后是一个 acquire 屏障，如下所示：
 
 <div style="columns: 2;column-gap: 20px;column-rule-color: green;column-rule-style: solid;">
   <div style="break-inside: avoid">
@@ -673,7 +673,7 @@ fn main() {
 
 > 误区：Relaxed 的操作是免费的。
 
-这是否成立取决于对“免费”一词的定义。的确，Relaxed 是最高效的内存排序，相比其他内存排序可以显著提升性能。事实上，对于所有现代平台，Relaxed 加载和存储操作编译成与非原子读写相同的处理器指令。
+这是否成立取决于对“免费”一词的定义。的确，Relaxed 是最高效的内存排序，相比其他内存排序可以显著提升性能。事实上，对于所有现代平台，Relaxed load 和 store 操作编译成与非原子读写相同的处理器指令。
 
 如果原子变量只在单个线程中使用，与非原子变量相比，速度上的差异很可能是因为编译器对非原子操作具有更大的自由度并更有效地进行优化。（编译器通常避免对原子变量进行大部分类型的优化。）
 
@@ -691,7 +691,7 @@ fn main() {
 
 > 误区：顺序一致的内存排序可用于“release-store”或“acquire-load”。
 
-虽然顺序一致性内存排序可以替代 Acquire 或 Release，但它并不能以某种方式创建 acquire-store 或 release-load。这些仍然是不存在的。Release 仅适用于存储操作，而 acquire 仅适用于加载操作。
+虽然顺序一致性内存排序可以替代 Acquire 或 Release，但它并不能以某种方式创建 acquire-store 或 release-load。这些仍然是不存在的。Release 仅适用于 store 操作，而 acquire 仅适用于 load 操作。
 
 例如，Release-store 与 SeqCst-store 不会形成任何 release-acquire 关系。如果你希望它们成为全局一致顺序的一部分，两个操作都必须使用 SeqCst。
 
