@@ -24,21 +24,24 @@
 | guard                | 守卫           | 4、9                |
 | happens-before       | happens-before | 3、4、5、6、7、9    |
 | leak                 | （内存）泄漏   | 1、3、5、8、10      |
+| load                 | load           | 2、3、5、6、7、8、9 |
 | lock（v）            | 锁定           | all                 |
 | memory ordering      | 内存排序       | 2、3、4、5、6、7、9 |
 | mutex                | 互斥锁         | 1、2、3、4、8、9    |
-| mutation             | 可变性         | 1、2、4、6、8             |
+| mutation             | 可变性         | 1、2、4、6、8       |
 | notify               | 通知           | 1、4、5、8、9       |
 | notify_all           | 通知所有       | 9                   |
 | park/block           | 阻塞           | all                 |
 | reader-writer lock   | 读写锁         | 1、3、4、8、9       |
 | reader               | reader         | 1、4、8、9、10      |
-| receiver             | 接收者         | 5        |
+| receiver             | 接收者         | 5                   |
 | reference            | 引用           | all                 |
 | spinLock             | 自旋锁         | 3、4、8、9          |
-| sender               | 发送者         | 5      |
+| sender               | 发送者         | 5                   |
 | spurious             | 虚假的         | 1、2、5、8、9       |
 | static               | 静态值         | 1                   |
+| store                | store          | 2、3、5、6、7、8、9 |
+| swap                 | 交换           | 2、3、5、6、7、8、9 |
 | syscall              | 系统调用       | 8、9                |
 | unlock（v）          | 解锁           | all                 |
 | unpark               | 释放           | all                 |

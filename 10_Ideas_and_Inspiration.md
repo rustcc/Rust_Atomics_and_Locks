@@ -10,7 +10,7 @@
 
 （<a href="https://marabos.nl/atomics/inspiration.html#semaphore" target="_blank">英文版本</a>）
 
-*信号量*实际上仅是有两个操作的计数器：*信号*（signal，也叫做 up 或 V）和*等待*（wait，也叫做 down 或 P）。signal 操作增加计数器到一个确定的最大值，而 wait 操作递减计数器的值。如果计数器是 0，wait 操作将阻塞并等待匹配的 signal 操作，以防止计数器将变成负数。这是一个灵活的工具，可以用于实现其它同步原语。
+*信号量*实际上仅是有两个操作的计数器：*信号*（signal，也叫做 up 或 V）和*等待*（wait，也叫做 down 或 P）。signal 操作增加计数器到一个确定的最大值，而等待操作递减计数器的值。如果计数器是 0，wait 操作将阻塞并等待匹配的 signal 操作，以防止计数器将变成负数。这是一个灵活的工具，可以用于实现其它同步原语。
 
 ![ ](https://github.com/rustcc/Rust_Atomics_and_Locks/raw/main/picture/raal_10in01.png)
 
