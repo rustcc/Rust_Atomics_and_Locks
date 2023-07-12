@@ -86,7 +86,7 @@
     * [x86 比较并交换指令](./7_Understanding_the_Processor.md#x86-比较并交换指令)
   * [ll-和-sc-指令](./7_Understanding_the_Processor.md#ll-和-sc-指令)
     * [arm-的-ldxr-和-stxr-指令](./7_Understanding_the_Processor.md#arm-的-ldxr-和-stxr-指令)
-    * [arm-的比较和交换操作](./7_Understanding_the_Processor.md#arm-的比较和交换操作)
+    * [arm-的比较并交换操作](./7_Understanding_the_Processor.md#arm-的比较并交换操作)
 * [缓存](./7_Understanding_the_Processor.md#缓存3)
   * [缓存一致性](./7_Understanding_the_Processor.md#缓存一致性)
     * [write-through 协议](./7_Understanding_the_Processor.md#write-through-协议)
