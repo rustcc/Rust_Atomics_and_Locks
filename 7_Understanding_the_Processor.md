@@ -943,13 +943,13 @@ acquire 操作不能与随后的任意内存操作重排，而 release 操作不
 <div class="box">
   <h2 style="text-align: center;">ARMv8.1 原子 Release 和 Acquire 指令</h2>
 
-  正如我们在 [ARMv8.1 原子指令](#ARMv8.1-原子指令)中讨论的，ARM64 的 ARMv8.1 版本包括 CISC 风格的原子操作指令，如 ldadd（load 和 add）作为 ldxr/stxr 循环的替代。
+  <p>正如我们在 <a href="#armv8-1-原子指令">ARMv8.1 原子指令</a>讨论的，ARM64 的 ARMv8.1 版本包括 CISC 风格的原子操作指令，如 ldadd（load 和 add）作为 ldxr/stxr 循环的替代。</p>
 
-  就像 load 和 store 操作带有 acquire 和 release 语义的特殊版本一样，这些指令也有对于更强内存排序的变体。因为这些指令既涉及到加载又涉及到存储，它们每一个都有三个额外的变体：一个用于 release（<code>-l</code>），一个用于 acquire（<code>-a</code>），和一个用于组合的 release 和 acquire（<code>-al</code>）语义。
+  <p>就像 load 和 store 操作带有 acquire 和 release 语义的特殊版本一样，这些指令也有对于更强内存排序的变体。因为这些指令既涉及到加载又涉及到存储，它们每一个都有三个额外的变体：一个用于 release（<code>-l</code>），一个用于 acquire（<code>-a</code>），和一个用于组合的 release 和 acquire（<code>-al</code>）语义。</p>
 
-  例如，对于 ldadd，还有 ldaddl、ldadda 和 ldaddal。类似地，cas 指令带有 casl、casa 和 casal 变体。
+  <p>例如，对于 ldadd，还有 ldaddl、ldadda 和 ldaddal。类似地，cas 指令带有 casl、casa 和 casal 变体。</p>
 
-  就像 load 和 store 指令一样，组合的 release 和 acquire（-al）变体也足以用于 SeqCst 操作。
+  <p>就像 load 和 store 指令一样，组合的 release 和 acquire（-al）变体也足以用于 SeqCst 操作。</p>
 </div>
 
 ### 一个实验
