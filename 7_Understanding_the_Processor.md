@@ -256,7 +256,7 @@ lock 前缀只能应用于非常有限数量的指令，包括 add、sub、and�
 
 让我们通过改变我们的最后一个示例来操作 AtomicI32，看看 lock add 的操作：
 
-<div style="columns: 3;column-gap: 20px;column-rule-color: green;column-rule-style: solid;">
+<div style="columns: 2;column-gap: 20px;column-rule-color: green;column-rule-style: solid;">
   <div style="break-inside: avoid">
     Rust 源码
     <pre>pub fn a(x: &AtomicI32) {
@@ -277,7 +277,7 @@ lock 前缀只能应用于非常有限数量的指令，包括 add、sub、and�
 
 我们可以通过对我们的代码做一个小修改，使其返回 fetch_add 返回的值，来看到它的实际效果：
 
-<div style="columns: 3;column-gap: 20px;column-rule-color: green;column-rule-style: solid;">
+<div style="columns: 2;column-gap: 20px;column-rule-color: green;column-rule-style: solid;">
   <div style="break-inside: avoid">
     Rust 源码
     <pre>pub fn a(x: &AtomicI32) -> i32 {
@@ -309,7 +309,7 @@ lock 前缀只能应用于非常有限数量的指令，包括 add、sub、and�
 
 我们可以通过将最后一个示例从 fetch_add 更改为 fetch_or 来在操作中看到这一点：
 
-<div style="columns: 3;column-gap: 20px;column-rule-color: green;column-rule-style: solid;">
+<div style="columns: 2;column-gap: 20px;column-rule-color: green;column-rule-style: solid;">
   <div style="break-inside: avoid">
     Rust 源码
     <pre>pub fn a(x: &AtomicI32) -> i32 {
@@ -782,7 +782,7 @@ acquire 操作不能与随后的任意内存操作重排，而 release 操作不
 
 我们可以通过查来自[加载和存储](#加载和存储操作)以及 [x86 lock 前缀](#x86-lock-前缀)片段来验证这些，然而我们要将 Relaxed 改变到 Release、Acquire 或 AcqRel：
 
-<div style="columns: 3;column-gap: 20px;column-rule-color: green;column-rule-style: solid;">
+<div style="columns: 2;column-gap: 20px;column-rule-color: green;column-rule-style: solid;">
   <div style="break-inside: avoid">
     Rust 源码
     <pre>pub fn a(x: &AtomicI32) {
@@ -815,7 +815,7 @@ acquire 操作不能与随后的任意内存操作重排，而 release 操作不
 
 让我们看看 SeqCst 发生了什么：
 
-<div style="columns: 3;column-gap: 20px;column-rule-color: green;column-rule-style: solid;">
+<div style="columns: 2;column-gap: 20px;column-rule-color: green;column-rule-style: solid;">
   <div style="break-inside: avoid">
     Rust 源码
     <pre>pub fn a(x: &AtomicI32) {
@@ -861,7 +861,7 @@ acquire 操作不能与随后的任意内存操作重排，而 release 操作不
 
 让我们看看在 ARM64 上对于 Release、Acquire 和 AcqRel 会发生什么：
 
-<div style="columns: 3;column-gap: 20px;column-rule-color: green;column-rule-style: solid;">
+<div style="columns: 2;column-gap: 20px;column-rule-color: green;column-rule-style: solid;">
   <div style="break-inside: avoid">
     Rust 源码
     <pre>pub fn a(x: &AtomicI32) {
@@ -907,7 +907,7 @@ acquire 操作不能与随后的任意内存操作重排，而 release 操作不
 
 如下面所示，升级到 SeqCst 会产生和之前完全一样的汇编代码：
 
-<div style="columns: 3;column-gap: 20px;column-rule-color: green;column-rule-style: solid;">
+<div style="columns: 2;column-gap: 20px;column-rule-color: green;column-rule-style: solid;">
   <div style="break-inside: avoid">
     Rust 源码
     <pre>pub fn a(x: &AtomicI32) {
@@ -1119,7 +1119,7 @@ acquire 屏障必须防止之前的 load 操作与任何后续的内存操作进
 
 我们在本章节可以看见的汇编指令的总结可以在图 7-1 找到。
 
-![ ](./picture/raal_0701.svg)
+![ ](https://github.com/rustcc/Rust_Atomics_and_Locks/raw/main/picture/raal_0701.svg)
 
 图 7-1。各种原子操作在 ARM64 和 x86-64 上编译为每个内存排序的指令概述。
 
