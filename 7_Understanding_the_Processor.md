@@ -256,7 +256,7 @@ lock 前缀只能应用于非常有限数量的指令，包括 add、sub、and�
 
 让我们通过改变我们的最后一个示例来操作 AtomicI32，看看 lock add 的操作：
 
-<div style="columns: 3;column-gap: 20px;column-rule-color: green;column-rule-style: solid;">
+<div style="columns: 2;column-gap: 20px;column-rule-color: green;column-rule-style: solid;">
   <div style="break-inside: avoid">
     Rust 源码
     <pre>pub fn a(x: &AtomicI32) {
@@ -277,7 +277,7 @@ lock 前缀只能应用于非常有限数量的指令，包括 add、sub、and�
 
 我们可以通过对我们的代码做一个小修改，使其返回 fetch_add 返回的值，来看到它的实际效果：
 
-<div style="columns: 3;column-gap: 20px;column-rule-color: green;column-rule-style: solid;">
+<div style="columns: 2;column-gap: 20px;column-rule-color: green;column-rule-style: solid;">
   <div style="break-inside: avoid">
     Rust 源码
     <pre>pub fn a(x: &AtomicI32) -> i32 {
@@ -309,7 +309,7 @@ lock 前缀只能应用于非常有限数量的指令，包括 add、sub、and�
 
 我们可以通过将最后一个示例从 fetch_add 更改为 fetch_or 来在操作中看到这一点：
 
-<div style="columns: 3;column-gap: 20px;column-rule-color: green;column-rule-style: solid;">
+<div style="columns: 2;column-gap: 20px;column-rule-color: green;column-rule-style: solid;">
   <div style="break-inside: avoid">
     Rust 源码
     <pre>pub fn a(x: &AtomicI32) -> i32 {
@@ -374,7 +374,7 @@ ARM64 的 LL 和 SC 指令被称为 ldxr（加载独占寄存器）和 stxr（�
 
 为了看到它们的实际效果，让我们看看在 ARM64 上进行原子加时会发生什么：
 
-<div style="columns: 3;column-gap: 20px;column-rule-color: green;column-rule-style: solid;">
+<div style="columns: 2;column-gap: 20px;column-rule-color: green;column-rule-style: solid;">
   <div style="break-inside: avoid">
     Rust 源码
     <pre>pub fn a(x: &AtomicI32) {
@@ -415,7 +415,7 @@ ARM64 的 LL 和 SC 指令被称为 ldxr（加载独占寄存器）和 stxr（�
 
 `compare_exchange` 操作通过使用条件分支指令在比较失败时跳过 store 指令，这与 LL/LC 模式的映射非常恰当。让我们来看看生成汇编的代码：
 
-<div style="columns: 3;column-gap: 20px;column-rule-color: green;column-rule-style: solid;">
+<div style="columns: 2;column-gap: 20px;column-rule-color: green;column-rule-style: solid;">
   <div style="break-inside: avoid">
     Rust 源码
     <pre>pub fn a(x: &AtomicI32) {
@@ -445,7 +445,7 @@ ldxr 指令加载了值，然后立即通过 cmp（比较）指令将其与预�
 
 如果我们将 `compare_exchange_weak` 替换为 `compare_exchange`，我们得到的汇编代码几乎完全相同，除了在操作失败时会有额外的分支来重新启动操作：
 
-<div style="columns: 3;column-gap: 20px;column-rule-color: green;column-rule-style: solid;">
+<div style="columns: 2;column-gap: 20px;column-rule-color: green;column-rule-style: solid;">
   <div style="break-inside: avoid">
     Rust 源码
     <pre>pub fn a(x: &AtomicI32) {
@@ -782,7 +782,7 @@ acquire 操作不能与随后的任意内存操作重排，而 release 操作不
 
 我们可以通过查来自[加载和存储](#加载和存储操作)以及 [x86 lock 前缀](#x86-lock-前缀)片段来验证这些，然而我们要将 Relaxed 改变到 Release、Acquire 或 AcqRel：
 
-<div style="columns: 3;column-gap: 20px;column-rule-color: green;column-rule-style: solid;">
+<div style="columns: 2;column-gap: 20px;column-rule-color: green;column-rule-style: solid;">
   <div style="break-inside: avoid">
     Rust 源码
     <pre>pub fn a(x: &AtomicI32) {
@@ -815,7 +815,7 @@ acquire 操作不能与随后的任意内存操作重排，而 release 操作不
 
 让我们看看 SeqCst 发生了什么：
 
-<div style="columns: 3;column-gap: 20px;column-rule-color: green;column-rule-style: solid;">
+<div style="columns: 2;column-gap: 20px;column-rule-color: green;column-rule-style: solid;">
   <div style="break-inside: avoid">
     Rust 源码
     <pre>pub fn a(x: &AtomicI32) {
@@ -861,7 +861,7 @@ acquire 操作不能与随后的任意内存操作重排，而 release 操作不
 
 让我们看看在 ARM64 上对于 Release、Acquire 和 AcqRel 会发生什么：
 
-<div style="columns: 3;column-gap: 20px;column-rule-color: green;column-rule-style: solid;">
+<div style="columns: 2;column-gap: 20px;column-rule-color: green;column-rule-style: solid;">
   <div style="break-inside: avoid">
     Rust 源码
     <pre>pub fn a(x: &AtomicI32) {
@@ -907,7 +907,7 @@ acquire 操作不能与随后的任意内存操作重排，而 release 操作不
 
 如下面所示，升级到 SeqCst 会产生和之前完全一样的汇编代码：
 
-<div style="columns: 3;column-gap: 20px;column-rule-color: green;column-rule-style: solid;">
+<div style="columns: 2;column-gap: 20px;column-rule-color: green;column-rule-style: solid;">
   <div style="break-inside: avoid">
     Rust 源码
     <pre>pub fn a(x: &AtomicI32) {
