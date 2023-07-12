@@ -752,21 +752,353 @@ fn main() {
 
 （<a href="https://marabos.nl/atomics/hardware.html#memory-ordering" target="_blank">英文版本</a>）
 
+当执行像 Rust 或 C 这样的语言中的任意原子操作时，我们会指定一个内存排序去告知编译器我们的排序需求。编译器将为处理器生成正确的指令，以防止它以某种方式重排指令，这将可能打破规则，使程序不正确。
+
+允许哪种类型的指令重新排序屈居于内存的操作。对于非原子和 relaxed 原子操作，任意类型的重排是可接受的。在另一个极端情况下，顺序一致原子操作完全不允许任意类型的原子排序。
+
+acquire 操作不能与随后的任意内存操作重排，而 release 操作不能与之前的任意内存操作重排。否则，可能在 acquire mutex 之前或者 release mutex 之后，访问一些受 mutex 保护的数据可能会导致数据竞争。
+
+<div class="box">
+  <h2 style="text-align: center;">Other-Multi-Copy Atomicity</h2>
+
+  <p>在一些处理器架构（例如，可能在显卡中找到的那些）中，内存操作顺序的影响方式并不总是可以通过指令重排序来解释。在一个核上的两个连续的 store 操作的效果可能会按照相同的顺序在第二个核上变得可见，但在第三个核上的顺序可能恰恰相反。例如，由于缓存不一致或共享存储缓冲区，可能会发生这种情况。由于这并不能解释第二核和第三核的观察结果之间的不一致性情况，所以无法通过第一个核上的指令被重排序来解释这种情况。</p>
+
+  <p>我们在<a href="./3_Memory_Ordering.html">第 3 章</a>中讨论的理论内存模型为此类处理器架构留出了空间，因为它不要求除顺序一致的原子操作之外的任何操作具有全局一致的顺序。</p>
+
+  <p>我们在本章中聚焦的架构（x86-64 和 ARM64）是“other-multi-copy atomic”，这意味着一旦写操作对任何核可见，它们就同时对所有核可见。对于其他“other-multi-copy atomic”架构，内存排序只是指令重排序的问题。</p>
+</div>
+
+一些架构（例如 ARM64）被称为*弱排序*，因为它们允许处理器自由地重排任意的内存操作。另一方面，*强排序*架构（例如 x86-64）对哪些内存操作可以排序是非常严格的。
+
 ### x86-64：强排序
 
 （<a href="https://marabos.nl/atomics/hardware.html#x86-64-strongly-ordered" target="_blank">英文版本</a>）
+
+在 x86-64 处理器上，load 操作将从不随后的内存操作之后发生。类似的，该架构也不允许 store 操作在之前的内存操作之前发生。你可能在 x86-64 上看到的唯一一种重新排序是 store 操作被延迟到稍后的 load 操作之后。
+
+> 由于 x86-64 架构的重排序限制，它通常被描述为强排序架构，尽管有些人更愿意保留这个这个术语描述所有保留内存操作排序的架构。
+
+这些限制满足了 acquire-load（因为 load 从不和后续操作重排序）和 release-store（因为 store 从不和之前的操作重排序）的所有需要。这意味着在 x86-64 上，我们可以“免费的”获取 release 和 acquire 语义：release 和 acquire 与 relaxed 操作等同。
+
+我们可以通过查来自[加载和存储](#加载和存储操作)以及 [x86 lock 前缀](#x86-lock-前缀)片段来验证这些，然而我们要将 Relaxed 改变到 Release、Acquire 或 AcqRel：
+
+<div style="columns: 3;column-gap: 20px;column-rule-color: green;column-rule-style: solid;">
+  <div style="break-inside: avoid">
+    Rust 源码
+    <pre>pub fn a(x: &AtomicI32) {
+    x.store(0, Release);
+}</pre>
+    <pre>pub fn a(x: &AtomicI32) -> i32 {
+    x.load(Acquire)
+}</pre>
+    <pre>pub fn a(x: &AtomicI32) {
+    x.fetch_add(10, AcqRel);
+}</pre>
+  </div>
+  <div style="break-inside: avoid">
+    编译的 x86-64
+    <pre>a:
+    mov dword ptr [rdi], 0
+    ret</pre>
+    <pre>a:
+    mov eax, dword ptr [rdi]
+    ret</pre>
+    <pre>a:
+    lock add dword ptr [rdi], 10
+    ret</pre>
+  </div>
+</div>
+
+不出所料，尽管我们指定了更强的内存顺序，但汇编是相同的。
+
+我们可以得出结论，在 x86-64 上，忽略潜在的编译器优化，acquire 和 release 操作仅和 relaxed 操作一样便宜。或者，更准确地说，relaxed 操作和 acquire 和 release 操作一样昂贵。
+
+让我们看看 SeqCst 发生了什么：
+
+<div style="columns: 3;column-gap: 20px;column-rule-color: green;column-rule-style: solid;">
+  <div style="break-inside: avoid">
+    Rust 源码
+    <pre>pub fn a(x: &AtomicI32) {
+    x.store(0, SeqCst);
+}</pre>
+    <pre>pub fn a(x: &AtomicI32) -> i32 {
+    x.load(SeqCst)
+}</pre>
+    <pre>pub fn a(x: &AtomicI32) {
+    x.fetch_add(10, SeqCst);
+}</pre>
+  </div>
+  <div style="break-inside: avoid">
+    编译的 x86-64
+    <pre>a:
+    xor eax, eax
+    xchg dword ptr [rdi], eax
+    ret</pre>
+    <pre>a:
+    mov eax, dword ptr [rdi]
+    ret</pre>
+    <pre>a:
+    lock add dword ptr [rdi], 10
+    ret</pre>
+  </div>
+</div>
+
+这段代码的 load 和 fetch_add 操作仍然导致和之前相同的汇编，单 store 操作的汇编代码完全改变了。xor 指令看起来有点突兀，但这仅是通过自己异或将 eax 寄存器设置为 0 的常见方式，异或结果总是 0。`mov eax, 0` 指令将也达到同样的效果，但是需要更多的空间。
+
+有趣的部分是 xchg 指令，它通常用于 swap 操作：一个同时检索旧值的 store 操作。
+
+对于 SeqCst store，像之前常规的 mov 指令不能满足要求，因为它将允许稍后的 load 操作重新排序，打破全局一致性排序。通过将其改为也执行 load 的操作，即使我们不关心它加载的值，我们也可以获得额外的保证，即我们的指令不会与后续的内存操作重排序，从而解决了问题。
+
+> SeqCst load 操作可以仍然是一个常规的 mov 指令，这正是因为 SeqCst store 被升级到 xchg。SeqCst 操作仅保证和其他 SeqCst 操作有全局一致性排序。SeqCst load 的 mov 可能仍然与前面的非 SeqCst store 操作的 mov 进行重排序，但这完全没有问题。
+
+在 x86-64 上，store 操作是唯一一个在 SeqCst 和较弱的内存排序之间存在差异的原子操作。换句话说，除了 store 之外的 x86-64 SeqCst 操作与 Release、Acquire、AcqRel，甚至 Relaxed 操作的一样便宜。或者，如果你愿意，x86-64 使得除 store 之外的 Relaxed 操作和 SeqCst 操作一样昂贵。
 
 ### ARM64：弱排序
 
 （<a href="https://marabos.nl/atomics/hardware.html#arm64-weakly-ordered" target="_blank">英文版本</a>）
 
+在如 ARM64 这样的*弱排序*架构上，所有的内存操作都有可能彼此之间被重新排序。这意味着，不像 x86-64，acquire 和 release 操作不会和 relaxed 操作一样。
+
+让我们看看在 ARM64 上对于 Release、Acquire 和 AcqRel 会发生什么：
+
+<div style="columns: 3;column-gap: 20px;column-rule-color: green;column-rule-style: solid;">
+  <div style="break-inside: avoid">
+    Rust 源码
+    <pre>pub fn a(x: &AtomicI32) {
+    x.store(0, Release);
+}</pre>
+    <pre>pub fn a(x: &AtomicI32) -> i32 {
+    x.load(Acquire)
+}</pre>
+    <pre>pub fn a(x: &AtomicI32) {
+    x.fetch_add(10, AcqRel);
+}</pre>
+  </div>
+  <div style="break-inside: avoid">
+    编译的 x86-64
+    <pre>a:
+    stlr wzr, [x0] #(1)
+    ret</pre>
+    <pre>a:
+    ldar w0, [x0] #(2)
+    ret</pre>
+    <pre>a:
+.L1:
+    ldaxr w8, [x0] #(3)
+    add w9, w8, #10
+    stlxr w10, w9, [x0] #(4)
+    cbnz w10, .L1
+    ret</pre>
+  </div>
+</div>
+
+与我们之前的 Relaxed 版本相比，这些改变是微妙的：
+
+1. str（store 寄存器）现在是 stlr（store-release 寄存器）
+2. ldr（load 寄存器）现在是 ldar（load-acquire 寄存器）
+3. ldxr（load exclusive 寄存器）现在是 ldaxr（load-acquire exclusive 寄存器）
+4. stxr（store exclusive 寄存器）现在是 stlxr（store-release exclusive 寄存器）
+
+如上所示，ARM64 对于 acquire 和 release 排序有一个特殊的版本的 load 和 store 指令。不同于 ldr 或者 ldxr 指令，ldar 或者 ldxar 指令将从不与任意后续的内存操作重排。类似地，与 str 或者 stxr 指令不同，stlr 或 stxlr 指令将从不会和任何之前的内存操作重排。
+
+使用仅有 Release 或 Acquire 排序的「获取并修改」操作，而非 AcqRel，将仅使用 stlxr 或 ldxar 指令分别配对一个常规的 ldxr 或 stxr 指令。
+
+除了对 release 和 acquire 语义所需的限制外，任何特殊的 acquire 和 release 指令都永远不会与其他任何这些特殊指令重新排序，这也使它们适合用于 SeqCst。
+
+如下面所示，升级到 SeqCst 会产生和之前完全一样的汇编代码：
+
+<div style="columns: 3;column-gap: 20px;column-rule-color: green;column-rule-style: solid;">
+  <div style="break-inside: avoid">
+    Rust 源码
+    <pre>pub fn a(x: &AtomicI32) {
+    x.store(0, SeqCst);
+}</pre>
+    <pre>pub fn a(x: &AtomicI32) -> i32 {
+    x.load(SeqCst)
+}</pre>
+    <pre>pub fn a(x: &AtomicI32) {
+    x.fetch_add(10, SeqCst);
+}</pre>
+  </div>
+  <div style="break-inside: avoid">
+    编译的 x86-64
+    <pre>a:
+    stlr wzr, [x0]
+    ret</pre>
+    <pre>a:
+    ldar w0, [x0]
+    ret</pre>
+    <pre>a:
+.L1:
+    ldaxr w8, [x0]
+    add w9, w8, #10
+    stlxr w10, w9, [x0]
+    cbnz w10, .L1
+    ret</pre>
+  </div>
+</div>
+
+这意味着在 ARM64 上，顺序一致性操作的和 acquire 操作和 release 操作一样便宜。或者说，ARM64 的 Acquire、Release 和 AcqRel 操作和 SeqCst 一样昂贵。然而，与 x86-64 不同，Relaxed 操作相对较便宜，因为它们不会导致比必要的更强的排序保证。
+
+<div class="box">
+  <h2 style="text-align: center;">ARMv8.1 原子 Release 和 Acquire 指令</h2>
+
+  正如我们在 [ARMv8.1 原子指令](#ARMv8.1-原子指令)中讨论的，ARM64 的 ARMv8.1 版本包括 CISC 风格的原子操作指令，如 ldadd（load 和 add）作为 ldxr/stxr 循环的替代。
+
+  就像 load 和 store 操作带有 acquire 和 release 语义的特殊版本一样，这些指令也有对于更强内存排序的变体。因为这些指令既涉及到加载又涉及到存储，它们每一个都有三个额外的变体：一个用于 release（<code>-l</code>），一个用于 acquire（<code>-a</code>），和一个用于组合的 release 和 acquire（<code>-al</code>）语义。
+
+  例如，对于 ldadd，还有 ldaddl、ldadda 和 ldaddal。类似地，cas 指令带有 casl、casa 和 casal 变体。
+
+  就像 load 和 store 指令一样，组合的 release 和 acquire（-al）变体也足以用于 SeqCst 操作。
+</div>
+
 ### 一个实验
 
 （<a href="https://marabos.nl/atomics/hardware.html#reordering-experiment" target="_blank">英文版本</a>）
 
+由强排序架构的普遍性带来的不幸后果是，某些类型的内存排序 bug 可能很容易被忽视。在需要 Acquire 或 Release 的地方使用 Relaxed 是不正确的，但在 x86-64 上，假设编译器没有重新排序你的原子操作，这可能最终在实践中偶然工作得很好。
+
+> 请记住，不仅处理器可以导致事情无序发生。只要考虑到内存排序的约束，编译器也被允许重新排序它产生的指令。
+>
+> 实际上，编译器在涉及原子操作的优化上往往非常保守，但这在未来可能会发生改变。
+
+这意味着人们可以轻易地编写不正确的并发代码，在 x86-64 上（意外地）运行得很好，但当在 ARM64 处理器编译和运行时可能会崩溃。
+
+让我们试着做到这一点。
+
+我们将创建一个自旋锁保护的计数器，但将所有的内存排序改为 Relaxed。让我们不费心创建自定义类型或者不安全的代码。相反，让我们仅使用 AtomicBool 作为锁和 AtomicUsize 作为计数器。
+
+为确保编译器不会重新排序我们操作，我们将使用 `std::sync::atomic::compiler_fence()` 函数来通知编译器哪些操作应该是 Acquire 或 Release 的，但不告诉处理器。
+
+我们将让四个线程反复锁定、增加 counter 和解锁——每个线程一百万次。把这些都放在一起，我们得到了以下代码：
+
+```rust
+fn main() {
+    let locked = AtomicBool::new(false);
+    let counter = AtomicUsize::new(0);
+
+    thread::scope(|s| {
+        // 产生 4 个线程，每个都迭代 100 万次
+        for _ in 0..4 {
+            s.spawn(|| for _ in 0..1_000_000 {
+                // 使用错误的内存排序获取锁
+                while locked.swap(true, Relaxed) {}
+                compiler_fence(Acquire);
+
+                // 持有锁的同时，非原子地增加 counter
+                let old = counter.load(Relaxed);
+                let new = old + 1;
+                counter.store(new, Relaxed);
+
+                // 使用错误的内存排序释放锁
+                compiler_fence(Release);
+                locked.store(false, Relaxed);
+            });
+        }
+    });
+
+    println!("{}", counter.into_inner());
+}
+```
+
+如果锁工作正常，我们预期 counter 的最终值应该恰好是四百万。注意，增加 counter 的方式是非原子的，用的是单独的 load 和 store 操作，而不是单个 fetch_add 操作。这样做是确保自旋锁如果存在任何问题，可能会导致部分递增操作没有正确计入，从而使 counter 的总值降低。
+
+在配备 x86-64 处理器的计算机上运行此程序几次：
+
+```txt
+4000000
+4000000
+4000000
+```
+
+不出所料，我们获得了“免费”的 Release 和 Acquire 语义，我们的错误不会造成任何问题。
+
+在 2021 年的安卓手机和 Raspberry Pi 3 model B 上尝试这个，两者都使用 ARM64 处理器，结果是相同的输出：
+
+```txt
+4000000
+4000000
+4000000
+```
+
+这表明并非所有 ARM64 处理器都使用所有形式的指令重新排序，尽管我们不能根据这个实验假设太多。
+
+在尝试使用 2021 款苹果的 iMac 时，它包含一个基于 ARM64 的 M1 处理器，我们得到了不同的结果：
+
+```rust
+3988255
+3982153
+3984205
+```
+
+我们之前隐藏的错误突然变成了一个实际问题——这个问题只在弱排序系统上可见。计数器仅仅偏离了大约 0.4%，这显示了这样的问题可能会有多么微妙。在现实生活的场景中，像这样的问题可能会长时间地保持未被发现。
+
+> 当试图复现上述结果时，不要忘记启用优化（使用 `cargo run --release` 或 `rustc -O`）。如果没有优化，同样的代码通常会产生更多的指令，这可能会掩盖指令重排序的微妙影响。
+
 ### 内存屏障
 
 （<a href="https://marabos.nl/atomics/hardware.html#memory-fences" target="_blank">英文版本</a>）
+
+我们还有一种与内存排序相关的指令尚未看到：内存屏障。*内存屏障*（fence）或*内存屏障*（barrier）指令用于表示我们在[第三章的“屏障”](./3_Memory_Ordering.md#屏障fence2)部分讨论过的 `std::sync::atomic::fence`。
+
+正如我们之前看到的，x86-64 和 ARM64 的内存排序都关乎指令重排的。屏障指令防止某些类型的指令被重排。
+
+acquire 屏障必须防止之前的 load 操作与任何后续的内存操作进行重排序。同样，release 屏障必须防止后续的 store 操作与任何之前的内存操作进行重排序。顺序一致的屏障必须防止所有在其之前的内存操作与屏障之后的内存操作进行重排序。
+
+在 x86-64 上，基本的内存排序语义已经满足了 acquire 和 release 屏障的需要。这是因为，该架构不允许发生这些屏障试图阻止的指令重排。
+
+让我们深入了解一下四种不同屏障在 x86-64 和 ARM64 上编译为什么指令：
+
+<div style="columns: 3;column-gap: 20px;column-rule-color: green;column-rule-style: solid;">
+  <div style="break-inside: avoid">
+    Rust 源码
+    <pre>pub fn a() {
+    fence(Acquire);
+}</pre>
+    <pre>pub fn a() {
+    fence(Release);
+}</pre>
+    <pre>pub fn a() {
+    fence(AcqRel);
+}</pre>
+    <pre>pub fn a() {
+    fence(SeqCst);
+}</pre>
+  </div>
+  <div style="break-inside: avoid">
+    编译的 x86-64
+    <pre>a:
+    ret</pre>
+    <pre>a:
+    ret</pre>
+    <pre>a:
+    ret</pre>
+    <pre>a:
+    mfence
+    ret</pre>
+  </div>
+  <div style="break-inside: avoid">
+    编译的 ARM64
+    <pre>a:
+    dmb ishld
+    ret</pre>
+    <pre>a:
+    dmb ish
+    ret</pre>
+    <pre>a:
+    dmb ish
+    ret</pre>
+    <pre>a:
+    dmb ish
+    ret</pre>
+  </div>
+</div>
+
+不用惊讶，x86-64 上的 acquire 和 release 屏障不会生成任何指令。在这种架构上，我们可以“免费”获得 release 和 acquire 的语义。只有 SeqCst 屏障会导致生成 mfence（内存屏障）指令。这个指令确保在继续之前，所有的内存操作都已经完成。
+
+在 ARM64 上，等效的指令是 `dmb ish`（data memory barrier, inner shared domain）。与 x86-64 不同，它也被用于 Release 和 AcqRel，因为这种架构不会隐式地提供 Acquire 和 Release 的语义。对于 Acquire，使用了一种影响稍微小一点的变体：`dmb ishld`。这种变体只等待 load 操作完成，但是允许先前的 store 操作自由地重新排序到它之后。
+
+这与我们之前看到的原子操作类似，我们看到 x86-64 为我们“免费”提供了 Release 和 Acquire 的屏障，而在 ARM64 上，顺序一致的屏障的成本与 Release 屏障相同。
 
 ## 总结
 
@@ -783,7 +1115,7 @@ fn main() {
 * 指令重排序在单线程程序内部是不可见的。
 * 在大多数架构上，包括 x86-64 和 ARM64，内存排序是为了防止某些类型的指令重排。
 * 在 x86-64 上，每个内存操作都具有 acquire 和 release 语义，使其与 relaxed 操作一样便宜或昂贵。除存储和屏障外的所有其他操作也具有顺序一致的语义，无需额外成本。
-* 在 ARM64 上，acquire 和 release 语义不如 relaxed 操作便宜，但也包括顺序一致（例如，SeqCst）语义，无需额外成本。
+* 在 ARM64 上，acquire 和 release 语义不如 relaxed 操作便宜，但它们在没有额外成本的情况下也包括顺序一致（SeqCst）语义。
 
 我们在本章节可以看见的汇编指令的总结可以在图 7-1 找到。
 
