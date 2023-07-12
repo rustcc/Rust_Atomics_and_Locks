@@ -756,7 +756,7 @@ if let Some(item) = item {
 
 读写锁是一个略微更复杂的 mutex 版本，它能够区分独占访问和共享访问的区别，并且可以提供两种访问方式。它有三种状态：解锁、由单个 *writer* 锁定（用于独占访问）以及由任意数量的 reader 锁定（用于共享访问）。它通常用于通常由多个线程读取的数据，但只是偶尔一次。
 
-Rust 标准库通过 `std::sync::RwLock<T>` 类型提供该锁。它与标准库的 Mutex 工作类似，只是它的接口大多是分成两个部分。然而，单个 `lock()` 方法，它有 `read()` 和 `write()` 方法，用于为 reader 或 writer 进行锁定。它还附带了两种 guard 类型，一种用于 reader，一种用于 writer：RwLockReadGuard 和 RwLockWriteGuard。前者只实现了 Deref，其行为像受保护数据共享引用，后者还实现了 DerefMut，其行为像独占引用。
+Rust 标准库通过 `std::sync::RwLock<T>` 类型提供该锁。它与标准库的 Mutex 工作类似，只是它的接口大多是分成两个部分。然而，单个 `lock()` 方法，它有 `read()` 和 `write()` 方法，用于为 reader 或 writer 进行锁定。它还附带了两种守卫类型，一种用于 reader，一种用于 writer：RwLockReadGuard 和 RwLockWriteGuard。前者只实现了 Deref，其行为像受保护数据共享引用，后者还实现了 DerefMut，其行为像独占引用。
 
 它实际上是 `RefCell` 的多线程版本，动态地跟踪引用的数量以确保借用规则得到维护。
 

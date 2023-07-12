@@ -740,7 +740,7 @@ impl<T> Weak<T> {
 
 如果我们为 `compare_exchange` 操作使用 `Relaxed` 内存排序，那么在从 `data_ref_count` 加载时，可能无法看到新升级的 `Weak` 指针的新值，尽管 `compare_exchange` 已经确认每个 `Weak` 指针都已经被丢弃。
 
-如果我们为 store 操作使用 `Relaxed` 内存排序，那么之前的加载操作可能会观察到未来的 `Arc::drop` 结果，而该 `Arc` 仍然可以降级。
+如果我们为 store 操作使用 `Relaxed` 内存排序，那么之前的 load 操作可能会观察到未来的 `Arc::drop` 结果，而该 `Arc` 仍然可以降级。
 
 `Acquire` 屏障与之前相同：它与 `Arc::Drop` 中的 `release-decrement` 操作同步，以确保通过之前的 Arc 克隆的每次访问都发生在新的独占访问之前。
 

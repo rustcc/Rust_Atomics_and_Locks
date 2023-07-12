@@ -159,7 +159,7 @@ pub unsafe fn unlock(&self) {
 
 为了能够提供一个完全安全地接口，我们需要将解锁操作绑定到 `&mut T` 的末尾。我们可以通过将此引用包装成我们自己的类型来做到这一点，该类型的行为类似于引用，但也实现了 Drop trait，以便在它被丢弃时做一些事情。
 
-这一类型通常被称为 *guard*，因为它有效地守卫了锁的状态，并且对该状态负责，直到它被丢弃。
+这一类型通常被称为*守卫*（guard），因为它有效地守卫了锁的状态，并且对该状态负责，直到它被丢弃。
 
 我们的 `Guard` 类型将仅包含对 SpinLock 的引用，以便它既可以访问 UnsafeCell，也可以稍后重置 AtomicBool：
 
@@ -292,7 +292,7 @@ error[E0382]: borrow of moved value: `g`
 * 当做出必要的未检查的假设以避免未定义的行为时，可以通过将函数标记为不安全来将责任转移到调用者。
 * `Deref` 和 `DerefMut` trait 可用于使类型像引用一样，透明地提供对另一个对象的访问。
 * `Drop` trait 可以用于在对象被丢弃时，做一些事情，例如当它超出作用域或者它被传递给 `drop()`。
-* *锁 guard* 是一种特殊类型的有用设计模式，它被用于表示对锁定的锁的（安全）访问。由于 `Deref` trait，这种类型通常与引用的行为相似，并通过 `Drop` trait 实现自动解锁。
+* *锁守卫*是一种特殊类型的有用设计模式，它被用于表示对锁定的锁的（安全）访问。由于 `Deref` trait，这种类型通常与引用的行为相似，并通过 `Drop` trait 实现自动解锁。
 
 <p style="text-align: center; padding-block-start: 5rem;">
   <a href="./5_Building_Our_Own_Channels.html">下一篇，第五章：构建我们自己的 Channel</a>

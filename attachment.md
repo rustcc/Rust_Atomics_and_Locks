@@ -25,6 +25,7 @@
 | happens-before       | happens-before | 3、4、5、6、7、9    |
 | Invalidation queue   | 失效队列       | 7                   |
 | leak                 | （内存）泄漏   | 1、3、5、8、10      |
+| load                 | load           | 2、3、5、6、7、8、9 |
 | lock（v）            | 锁定           | all                 |
 | memory ordering      | 内存排序       | 2、3、4、5、6、7、9 |
 | mutex                | 互斥锁         | 1、2、3、4、8、9    |
@@ -43,6 +44,8 @@
 | static               | 静态值         | 1                   |
 | stop the world       | 停止其他活动   | 7                   |
 | store buffer         | 存储缓冲区     | 7                   |
+| store                | store          | 2、3、5、6、7、8、9 |
+| swap                 | 交换           | 2、3、5、6、7、8、9 |
 | syscall              | 系统调用       | 8、9                |
 | unlock（v）          | 解锁           | all                 |
 | unpark               | 释放           | all                 |
