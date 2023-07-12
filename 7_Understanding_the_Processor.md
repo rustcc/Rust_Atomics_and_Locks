@@ -374,7 +374,7 @@ ARM64 的 LL 和 SC 指令被称为 ldxr（加载独占寄存器）和 stxr（�
 
 为了看到它们的实际效果，让我们看看在 ARM64 上进行原子加时会发生什么：
 
-<div style="columns: 3;column-gap: 20px;column-rule-color: green;column-rule-style: solid;">
+<div style="columns: 2;column-gap: 20px;column-rule-color: green;column-rule-style: solid;">
   <div style="break-inside: avoid">
     Rust 源码
     <pre>pub fn a(x: &AtomicI32) {
@@ -415,7 +415,7 @@ ARM64 的 LL 和 SC 指令被称为 ldxr（加载独占寄存器）和 stxr（�
 
 `compare_exchange` 操作通过使用条件分支指令在比较失败时跳过 store 指令，这与 LL/LC 模式的映射非常恰当。让我们来看看生成汇编的代码：
 
-<div style="columns: 3;column-gap: 20px;column-rule-color: green;column-rule-style: solid;">
+<div style="columns: 2;column-gap: 20px;column-rule-color: green;column-rule-style: solid;">
   <div style="break-inside: avoid">
     Rust 源码
     <pre>pub fn a(x: &AtomicI32) {
@@ -445,7 +445,7 @@ ldxr 指令加载了值，然后立即通过 cmp（比较）指令将其与预�
 
 如果我们将 `compare_exchange_weak` 替换为 `compare_exchange`，我们得到的汇编代码几乎完全相同，除了在操作失败时会有额外的分支来重新启动操作：
 
-<div style="columns: 3;column-gap: 20px;column-rule-color: green;column-rule-style: solid;">
+<div style="columns: 2;column-gap: 20px;column-rule-color: green;column-rule-style: solid;">
   <div style="break-inside: avoid">
     Rust 源码
     <pre>pub fn a(x: &AtomicI32) {
@@ -943,13 +943,13 @@ acquire 操作不能与随后的任意内存操作重排，而 release 操作不
 <div class="box">
   <h2 style="text-align: center;">ARMv8.1 原子 Release 和 Acquire 指令</h2>
 
-  正如我们在 [ARMv8.1 原子指令](#ARMv8.1-原子指令)中讨论的，ARM64 的 ARMv8.1 版本包括 CISC 风格的原子操作指令，如 ldadd（load 和 add）作为 ldxr/stxr 循环的替代。
+  <p>正如我们在 <a href="#armv8-1-原子指令">ARMv8.1 原子指令</a>讨论的，ARM64 的 ARMv8.1 版本包括 CISC 风格的原子操作指令，如 ldadd（load 和 add）作为 ldxr/stxr 循环的替代。</p>
 
-  就像 load 和 store 操作带有 acquire 和 release 语义的特殊版本一样，这些指令也有对于更强内存排序的变体。因为这些指令既涉及到加载又涉及到存储，它们每一个都有三个额外的变体：一个用于 release（<code>-l</code>），一个用于 acquire（<code>-a</code>），和一个用于组合的 release 和 acquire（<code>-al</code>）语义。
+  <p>就像 load 和 store 操作带有 acquire 和 release 语义的特殊版本一样，这些指令也有对于更强内存排序的变体。因为这些指令既涉及到加载又涉及到存储，它们每一个都有三个额外的变体：一个用于 release（<code>-l</code>），一个用于 acquire（<code>-a</code>），和一个用于组合的 release 和 acquire（<code>-al</code>）语义。</p>
 
-  例如，对于 ldadd，还有 ldaddl、ldadda 和 ldaddal。类似地，cas 指令带有 casl、casa 和 casal 变体。
+  <p>例如，对于 ldadd，还有 ldaddl、ldadda 和 ldaddal。类似地，cas 指令带有 casl、casa 和 casal 变体。</p>
 
-  就像 load 和 store 指令一样，组合的 release 和 acquire（-al）变体也足以用于 SeqCst 操作。
+  <p>就像 load 和 store 指令一样，组合的 release 和 acquire（-al）变体也足以用于 SeqCst 操作。</p>
 </div>
 
 ### 一个实验
