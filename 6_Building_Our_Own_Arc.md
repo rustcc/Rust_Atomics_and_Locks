@@ -772,7 +772,7 @@ impl<T> Weak<T> {
 
 我们为 `compare_exchange_weak` 操作使用 `acquire` 内存排序，它与 `get_mut` 函数中的 `release-store` 同步。否则，可能会出现在 `get_mut` 函数解锁计数器之前，后续的 `Arc::drop` 操作的效果对正在运行 `get_mut` 的线程可见。
 
-换句话说，在这里，acquire 的「比较和交换」操作有效地“锁定”了 get_mut，阻止其成功。后续的 `Weak::drop` 操作可以使用 `release` 内存排序将计数器递减回 1，从而有效地“解锁”。
+换句话说，在这里，acquire 的「比较并交换」操作有效地“锁定”了 get_mut，阻止其成功。后续的 `Weak::drop` 操作可以使用 `release` 内存排序将计数器递减回 1，从而有效地“解锁”。
 
 > 我们刚刚制作的 `Arc<T>` 和 `Weak<T>` 的优化实现与 Rust 标准库中包含的实现几乎相同。
 
