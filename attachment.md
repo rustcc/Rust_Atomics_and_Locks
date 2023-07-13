@@ -6,14 +6,15 @@
 * ABA 问题，[#](./2_Atomics.md#index-ABAproblem)
 * 终止进程，[#](./2_Atomics.md#index-abortingtheprocess)
 * AcqRel，[#](./3_Memory_Ordering.md#index-AcqRel)
-  * （也参见 release 和 acquire 内存排序）
+  * （参见 release 和 acquire 内存排序）
 * acquire 内存排序（参见 release 和 acquire 内存排序）
 * add 指令（ARM），[#](./7_Understanding_the_Processor.md#index-addinstructionARM)
 * add 指令（x86），[#](./7_Understanding_the_Processor.md#index-addinstructionx86)
-* address-based waiting (Windows)，#，(see also futex)
-* air，out of thin，#
-* alignment，#
-* allocating IDs (see ID allocation)
+* 基于地址的等待（Windows），[#](./8_Operating_System_Primitives.md#基于地址的等待)
+  * （参见 futex）
+* 凭空出现的值，[#](./3_Memory_Ordering.html#凭空出现的值)
+* alignment，[#](./7_Understanding_the_Processor.md#index-alignment)
+* 分配（参见 ID 分配）
 * AMD processors，#
 * and instruction (x86)，#
 * Arc，#
