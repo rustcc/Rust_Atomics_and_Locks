@@ -4,12 +4,12 @@
 
 * AArch64（参见 ARM64）
 * ABA 问题，[#](./2_Atomics.md#index-ABAproblem)
-* aborting the process，#
-* AcqRel，#
-  * (see also release and acquire memory ordering)
-* acquire memory ordering (see release and acquire memory ordering)
-* add instruction (ARM)，#
-* add instruction (x86)，#
+* 终止进程，[#](./2_Atomics.md#index-abortingtheprocess)
+* AcqRel，[#](./3_Memory_Ordering.md#index-AcqRel)
+  * （也参见 release 和 acquire 内存排序）
+* acquire 内存排序（参见 release 和 acquire 内存排序）
+* add 指令（ARM），[#](./7_Understanding_the_Processor.md#index-addinstructionARM)
+* add 指令（x86），[#](./7_Understanding_the_Processor.md#index-addinstructionx86)
 * address-based waiting (Windows)，#，(see also futex)
 * air，out of thin，#
 * alignment，#

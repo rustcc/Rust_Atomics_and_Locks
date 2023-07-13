@@ -229,7 +229,7 @@ fn main() {
 
 当 acquire-load 操作观察 release-store 操作的结果时，就会形成 happens-before 关系。在这种情况下，store 操作及其之前的所有操作在时间上先于 load 操作和之后的所有操作。
 
-当使用 Acquire 进行「获取并修改」或者「比较并交换」操作时，它仅适用于操作的 load 部分。类似地，Release 仅适用于操作的 store 部分。`AcqRel` 用于表示 Acquire 和 Release 的组合，这既能使 load 使用 Acquire，也能使 store 使用 Release。
+当使用 Acquire 进行「获取并修改」或者「比较并交换」操作时，它仅适用于操作的 load 部分。类似地，Release 仅适用于操作的 store 部分。`AcqRel` 用于表示 Acquire 和 Release 的组合，这既能使 load 使用 Acquire，也能使 store 使用 Release。<a class="indexterm" id="index-AcqRel">
 
 让我们回顾一个示例，看看我们在实践中如何使用它们。在以下示例中，我们将一个 64 位整数从产生的线程发送到主线程。我们使用一个额外的原子布尔类型以指示主线程，整数已经被存储并且已经可以读取：
 
