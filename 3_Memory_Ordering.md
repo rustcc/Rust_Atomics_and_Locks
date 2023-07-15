@@ -140,7 +140,7 @@ fn f() {
 
 由于 join 和 spawn 操作形成 happens-before 关系，我们肯定知道 X 的 load 操作在第一个 store 之后，但在最后一个 store 之前，正如在图 3-2 所见。然而，它是否在第二个 store 操作之前或之后观察值是不可预测的。换句话说，它可能是 1 或 2，但不是 0 或 3。
 
-![ ](https://github.com/rustcc/Rust_Atomics_and_Locks/raw/main/picture/raal_0301.png)
+![ ](https://github.com/rustcc/Rust_Atomics_and_Locks/raw/main/picture/raal_0302.png)
 图 3-2。示例代码中 spwan、join、store 和 load 操作之间的 happens-before 关系。
 
 ## Relaxed 排序
