@@ -146,4 +146,4 @@
 
 注明：本文译自 <https://marabos.nl/atomics/>，若其它平台引用此翻译，也请注明出处。
 
-翻译进行中...
+加入我们，编写[索引](https://github.com/rustcc/Rust_Atomics_and_Locks/blob/main/attachment.md#索引)或者进行[校对](https://github.com/rustcc/Rust_Atomics_and_Locks/issues/28)以帮助更多的人
