@@ -384,6 +384,7 @@ impl<T> Receiver<T> {
 
 为了实现这一点，我们需要为我们的 UnsafeCell 和 AtomicBool 找到一个位置。之前，我们仅有一个具有这些字段的结构体，但是现在我们有两个单独的结构体，每个结构体都可能存在更长的时间。
 
+<a class="indexterm" id="index-Arc-usingforchannelstate"></a>
 因为 sender 和 receiver 将需要共享这些变量的所有权，我们将使用 Arc（[第一章“引用计数”](./1_Basic_of_Rust_Concurrency.md#引用计数)）为我们提供引用计数共享内存分配，我们将在其中存储共享的 Channel 对象。正如以下展示的，Channel 类型不必是公共的，因为它的存在是与用户无关的细节。
 
 ```rust

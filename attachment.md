@@ -12,20 +12,20 @@
 * add 指令（x86），[#](./7_Understanding_the_Processor.md#index-addinstructionx86)
 * 基于地址的等待（Windows），[#](./8_Operating_System_Primitives.md#基于地址的等待)
   * （参见 futex）
-* 凭空出现的值，[#](./3_Memory_Ordering.html#凭空出现的值)
+* 凭空出现的值，[#](./3_Memory_Ordering.md#凭空出现的值)
 * alignment，[#](./7_Understanding_the_Processor.md#index-alignment)
 * 分配（参见 ID 分配）
-* AMD processors，#
-* and instruction (x86)，#
-* Arc，#
-  * building our own，#
-  * cyclic structures，#
-  * get_mut，#
-  * memory ordering，#，#，#，#
-  * naming clones，#
-  * using for channel state，#
-  * weak pointers，#
-    * performance cost，#
+* AMD 处理器，[#](./7_Understanding_the_Processor.md#index-AMDprocessors)
+* and 指令（x86），[#](./7_Understanding_the_Processor.md#index-x86-64instructions-and)
+* Arc，[#](./1_Basic_of_Rust_Concurrency.md#index-Arc)
+  * 构建我们自己的 Arc，[#](./6_Building_Our_Own_Arc.md#index-buildingourown-Arc)
+  * 循环结构，[#](./6_Building_Our_Own_Arc.md#index-Arc-cyclicstructures)
+  * get_mut，[#](./6_Building_Our_Own_Arc.md#index-Arc-getmut)
+  * 内存排序，[#](./6_Building_Our_Own_Arc.md#index-Arc-memoryordering)，[#](./6_Building_Our_Own_Arc.md#index-happens-beforerelationships-inArc-2)，[#](./6_Building_Our_Own_Arc.md#index-Arc-memoryordering-3)，[#](./6_Building_Our_Own_Arc.md#index-Arc-memoryordering-4)
+  * 命名克隆，[#](./1_Basic_of_Rust_Concurrency.md#命名克隆)
+  * 用于 Channel 的情况，[#](./5_Building_Our_Own_Channels.md#index-Arc-usingforchannelstate)
+  * weak 指针，[#](./6_Building_Our_Own_Arc.md#weak-指针)
+    * 性能开销，[#](./6_Building_Our_Own_Arc.md#index-Arc-weakpointers-performancecost)
 * arguments，consuming，#
 * ARM64 (processor architecture)，#
   * aarch64-unknown-linux-musl target，#
