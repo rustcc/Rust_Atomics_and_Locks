@@ -2,6 +2,7 @@
 
 （<a href="https://marabos.nl/atomics/building-arc.html" target="_blank">英文版本</a>）
 
+<a class="indexterm" id="index-buildingourown-Arc"></a>
 在[第一章“引用计数”](./1_Basic_of_Rust_Concurrency.md#引用计数)中，我们了解了 `std::sync::Arc<T>` 类型允许通过引用计数共享所有权。`Arc::new` 函数创建一个新的内存分配，就像 `Box::new`。然而，与 Box 不同的是，克隆 Arc 将共享原始的内存分配，而不是创建一个新的。只有当 Arc 和所有其他的克隆被丢弃，共享的内存分配才会被丢弃。
 
 这种类型的实现所涉及的内存排序可能是非常有趣的。在本章中，我们将通过实现我们自己的 `Arc<T>` 将更多理论付诸实践。我们将开始一个基础的版本，然后将其扩展到支持循环结构的 *weak 指针*，并且最终将其优化为一个与标准库差不多的实现结束本章。
@@ -126,6 +127,7 @@ impl<T> Drop for Arc<T> {
 }
 ```
 
+<a class="indexterm" id="index-Arc-memoryordering"></a>
 对于这个操作，我们不能使用 Relaxed 排序，因为我们需要确保当我们丢弃它时，没有任何东西仍然在访问数据。换句话说，每个之前的 Arc 丢弃操作都必须发生在最终丢弃之前。因此，最后的 `fetch_sub` 必须与之前的 `fetch_sub` 操作建立一个 happens-before 关系，我们可以使用 release 和 acquire 排序来实现这一点：例如，从 2 递减到 1 可以有效地“释放”数据，而从 1 递减到 0 则“获取”了对它的所有权。
 
 我们可以使用 `AcqRel` 内存排序来覆盖这两种情况，但只有最后一个递减到 0 才需要 `Acquire`，而其他情况只需要 `Release`。为了提高效率，我们将在 `Release` 用于 `fetch_sub` 操作，并且仅在必要时使用单独的 `Acquire` 屏障：
@@ -208,8 +210,10 @@ fn test() {
 
 然而，我们可以有条件地允许独占访问。我们可以创建一个方法，如果引用计数为 1，则提供 `&mut T`，这证明没有其他 Arc 对象可以用来访问相同的数据。
 
+<a class="indexterm" id="index-Arc-getmut"></a>
 该函数我们将称它为 `get_mut`，它必须接受一个 `&mute Self` 以确保没有其他的相同的东西使用 Arc 获取 T。如果这个 Arc 仍然可以共享，知道只有一个 Arc 对象是没有意义的。
 
+<a class="indexterm" id="index-happens-beforerelationships-inArc-2"></a>
 我们需要使用 acquire 内存排序去确保之前拥有 Arc 克隆的线程不再访问数据。我们需要与导致引用计数为 1 的每个单独的 `drop` 建立一个 happens-before 关系。
 
 这仅在引用计数实际为 1 时才重要：如果引用计数高，我们将不再提供一个 `&mut T`，并且内存排序是无关紧要。因此，我们可以使用 relaxed load 操作，随后跟条件行的 acquire 屏障，如下所示：
@@ -239,6 +243,7 @@ fn test() {
 
 当表示在内存中多个对象组成的结构时，引用计数非常有用。例如，在树结构中的每个节点可以包含对其子节点的 Arc 引用。这样，当我们丢弃一个节点时，不再使用的孩子节点也会被（递归地）丢弃。
 
+<a class="indexterm" id="index-Arc-cyclicstructures"></a>
 然而，对于*循环结构*来说，这会失效。如果一个子节点也包含对它父节点的 Arc 引用，那么当所有 Arc 引用都不存在时，两者都不会被丢弃，因为始终存至少有一个 Arc 引用仍然指向它们。
 
 标准库的 Arc 提供了解决这个问题的办法：`Weak<T>`。`Weak<T>`（也被称为 *weak 指针*），行为有点像 `Arc<T>`，但是并不会阻止对象被丢弃。T 可以在多个 `Arc<T>` 和 `Weak<T>` 对象之间共享，但是当所有 `Arc<T>` 对象都消失时，不管是否还有 `Weak<T>` 对象，T 都会被丢弃。
@@ -510,6 +515,7 @@ fn test() {
 
 （<a href="https://marabos.nl/atomics/building-arc.html#optimizing-arc" target="_blank">英文版本</a>）
 
+<a class="indexterm" id="index-Arc-weakpointers-performancecost"></a>
 虽然 weak 指针是可用的，但 Arc 类型通常用于没有任何 weak 的情况下。我们上次实现的缺点是，克隆和丢弃 Arc 现在都需要两个原子操作，因为它们不得不递增或递减两个计数器。这使得 Arc 用于丢弃 weak 指针的开销增大，即使它们没有使用 weak 指针。
 
 似乎解决的方案是分别计算 `Arc<T>` 和 `Weak<T>` 指针的计数，但那样我们将无法原子地检测这两个计数器是否为 0。为了理解这个问题，想象我们有一个线程执行以下令人恼火的函数：
@@ -737,6 +743,7 @@ impl<T> Weak<T> {
 ```
 
 正如你所预期的那样，锁定操作（compare_exchange）将使用 `Acquire` 内存排序，而解锁操作（store）将使用 `Release` 内存排序。
+<a class="indexterm" id="index-Arc-memoryordering-3"></a>
 
 如果我们为 `compare_exchange` 操作使用 `Relaxed` 内存排序，那么在从 `data_ref_count` 加载时，可能无法看到新升级的 `Weak` 指针的新值，尽管 `compare_exchange` 已经确认每个 `Weak` 指针都已经被丢弃。
 
@@ -770,6 +777,7 @@ impl<T> Weak<T> {
     }
 ```
 
+<a class="indexterm" id="index-Arc-memoryordering-4"></a>
 我们为 `compare_exchange_weak` 操作使用 `acquire` 内存排序，它与 `get_mut` 函数中的 `release-store` 同步。否则，可能会出现在 `get_mut` 函数解锁计数器之前，后续的 `Arc::drop` 操作的效果对正在运行 `get_mut` 的线程可见。
 
 换句话说，在这里，acquire 的「比较并交换」操作有效地“锁定”了 get_mut，阻止其成功。后续的 `Weak::drop` 操作可以使用 `release` 内存排序将计数器递减回 1，从而有效地“解锁”。

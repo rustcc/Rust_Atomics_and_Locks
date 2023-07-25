@@ -302,6 +302,7 @@ error[E0277]: `Rc` cannot be sent between threads safely
 
 事实证明，`Rc` 不是*线程安全*的（详见，[线程安全：Send 和 Sync](#线程安全send-和-sync)）。如果多个线程有相同内存分配的 `Rc`，那么它们可能尝试并发修改引用计数，这可能产生不可预测的结果。
 
+<a class="indexterm" id="index-Arc"></a>
 然而，我们可以使用 `std::sync::Arc`，它代表“原子引用计数”。它与 `Rc` 相同，只是它保证了对引用计数的修改是不可分割的*原子*操作，因此可以安全地与多个线程使用。（详见[第二章](./2_Atomics.md)。）
 
 ```rust
