@@ -133,7 +133,7 @@ fn main() {
 
 <a href="https://marabos.nl/atomics/os-primitives.html#linux" target="_blank">英文版本</a>
 
-在 Linux 系统中，pthread 同步原语所有都是使用 *futex 系统调用*实现。它的名称来自“快速用户互斥[^6]”（fast user-space mutex），因为**增加**这个系统调用最初的动机就是允许库（如 pthread 实现）包含一个快速且高效 mutex 实现。它的灵活远不止于此，可以用来构建许多不同的同步工具。
+在 Linux 系统中，pthread 同步原语所有都是使用 *futex 系统调用*实现。它的名称来自“快速用户区互斥[^6]”（fast user-space mutex），因为**增加**这个系统调用最初的动机就是允许库（如 pthread 实现）包含一个快速且高效 mutex 实现。它的灵活远不止于此，可以用来构建许多不同的同步工具。
 
 在 2003 年，futex 系统调用被增加到 Linux 内核，此后进行了几次改善和扩展。一些其他的系统调用因此也**增加**了相似的功能，更值得注意的是，在 2012 年 Windows 8 也**增加**了 WaitOnAddress（我们将会稍后在[“Windows”](#windows)部分讨论这个）。在 2020 年，C++ 语言甚至把基础的类 futex 操作**增加**到了标准库，并添加了 `atomic_wait` 和 `atomic_notify` 函数。
 
