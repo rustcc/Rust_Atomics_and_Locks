@@ -132,7 +132,7 @@
   * [避免 writer 陷入饥饿](./9_Building_Our_Own_Locks.md#避免-writer-陷入饥饿)
 * [总结](./9_Building_Our_Own_Locks.md#总结)
 
-## [第十章：主意和灵感](./10_Ideas_and_Inspiration.md)
+## [第十章：理念和灵感](./10_Ideas_and_Inspiration.md)
 
 * [信号量](./10_Ideas_and_Inspiration.md#信号)
 * [RCU](./10_Ideas_and_Inspiration.md#rcu)
