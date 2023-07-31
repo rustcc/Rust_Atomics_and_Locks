@@ -154,7 +154,7 @@ add_ten:
   <div style="break-inside: avoid">
     Rust 源码
     <pre>pub fn a(x: &mut i32) {
-    *x = 0;
+    x.store(0, Relaxed);
 }</pre>
   </div>
   <div style="break-inside: avoid">
@@ -166,7 +166,7 @@ add_ten:
   <div style="break-inside: avoid">
     编译的 ARM64
     <pre>a:
-    mov dword ptr [rdi], 0
+    str wzr, [x0]
     ret</pre>
   </div>
 </div>
@@ -197,7 +197,7 @@ add_ten:
   <div style="break-inside: avoid">
     编译的 ARM64
     <pre>a:
-    mov eax, dword ptr [rdi]
+    ldr w0, [x0]
     ret</pre>
     <pre>a:
     ldr w0, [x0]
