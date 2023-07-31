@@ -154,7 +154,7 @@ add_ten:
   <div style="break-inside: avoid">
     Rust 源码
     <pre>pub fn a(x: &mut i32) {
-    *x = 0;
+    x.store(0, Relaxed);
 }</pre>
   </div>
   <div style="break-inside: avoid">
@@ -166,7 +166,7 @@ add_ten:
   <div style="break-inside: avoid">
     编译的 ARM64
     <pre>a:
-    mov dword ptr [rdi], 0
+    str wzr, [x0]
     ret</pre>
   </div>
 </div>
@@ -197,7 +197,7 @@ add_ten:
   <div style="break-inside: avoid">
     编译的 ARM64
     <pre>a:
-    mov eax, dword ptr [rdi]
+    ldr w0, [x0]
     ret</pre>
     <pre>a:
     ldr w0, [x0]
@@ -305,7 +305,7 @@ lock 前缀只能应用于非常有限数量的指令，包括 add、sub、and�
 
 （<a href="https://marabos.nl/atomics/hardware.html#x86-cas" target="_blank">英文版本</a>）
 
-在[第二章“比较并交换操作”](./2_Atomics.md#比较并交换操作)中，我们看到任何原子「获取并修改」操作都可以实现为一个「比较并交换」循环。对于由单个 x86-63 指令表示的操作，编译器可以使用这种方式，因为该架构确实包含一个（lock 前缀）的 cmpxcchg（比较并交换）指令。
+在[第二章“比较并交换操作”](./2_Atomics.md#比较并交换操作)中，我们看到任何原子「获取并修改」操作都可以实现为一个「比较并交换」循环。对于由单个 x86-64 指令表示的操作，编译器可以使用这种方式，因为该架构确实包含一个（lock 前缀）的 cmpxcchg（比较并交换）指令。
 
 我们可以通过将最后一个示例从 fetch_add 更改为 fetch_or 来在操作中看到这一点：
 
