@@ -11,7 +11,7 @@
 * [线程安全：Send 和 Sync](./1_Basic_of_Rust_Concurrency.md#线程安全send-和-sync)
 * [锁：互斥锁和读写锁](./1_Basic_of_Rust_Concurrency.md#锁互斥锁和读写锁)
   * [Rust 的互斥锁](./1_Basic_of_Rust_Concurrency.md#rust-的互斥锁)
-  * [锁中毒](./1_Basic_of_Rust_Concurrency.md#锁中毒posion)
+  * [锁中毒](./1_Basic_of_Rust_Concurrency.md#锁中毒poison)
   * [读写锁](./1_Basic_of_Rust_Concurrency.md#读写锁)
 * [等待：阻塞和条件变量](./1_Basic_of_Rust_Concurrency.md#等待-阻塞park和条件变量)
   * [线程阻塞](./1_Basic_of_Rust_Concurrency.md#线程阻塞)
