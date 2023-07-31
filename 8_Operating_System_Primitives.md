@@ -167,7 +167,7 @@ pub fn wait(a: &AtomicU32, expected: u32) {
             a as *const AtomicU32, // 要操作的原子
             libc::FUTEX_WAIT, // futex 操作
             expected, // 预期的值
-            std::ptr::null::<libc::timespec>(), // 不能超时
+            std::ptr::null::<libc::timespec>(), // 没有超时
         );
     }
 }
