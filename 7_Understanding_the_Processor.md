@@ -153,7 +153,7 @@ add_ten:
 <div style="columns: 3;column-gap: 20px;column-rule-color: green;column-rule-style: solid;">
   <div style="break-inside: avoid">
     Rust 源码
-    <pre>pub fn a(x: &mut i32) {
+    <pre>pub fn a(x: &AtomicI32) {
     x.store(0, Relaxed);
 }</pre>
   </div>
@@ -171,9 +171,9 @@ add_ten:
   </div>
 </div>
 
-或许令人惊讶的是，它的汇编与非原子版本完全相同。事实证明，mov 和 str 指令已经是原子的。它们要么发生，要么它们完全不会发生。显然，在 `&mut i32` 和 `&i32` 之间的任何差异仅对编译器检查和优化有关，但对于处理器是没有意外的——至少对于这两种架构上的 relaxed store 操作。
+或许令人惊讶的是，它的汇编与非原子版本完全相同。事实证明，mov 和 str 指令已经是原子的。它们要么发生，要么它们完全不会发生。显然，在 `&mut i32` 和 `&AtomicI32` 之间的任何差异仅对编译器检查和优化有关，但对于处理器是没有意外的——至少对于这两种架构上的 relaxed store 操作。
 
-当我们查看 relaxed store 操作时，也是相同的：
+当我们查看 relaxed load 操作时，也是相同的：
 
 <div style="columns: 3;column-gap: 20px;column-rule-color: green;column-rule-style: solid;">
   <div style="break-inside: avoid">
@@ -281,7 +281,7 @@ lock 前缀只能应用于非常有限数量的指令，包括 add、sub、and�
   <div style="break-inside: avoid">
     Rust 源码
     <pre>pub fn a(x: &AtomicI32) -> i32 {
-    x.fetch_add(10, Relaxed);
+    x.fetch_add(10, Relaxed)
 }</pre>
   </div>
   <div style="break-inside: avoid">
