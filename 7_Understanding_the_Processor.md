@@ -153,8 +153,8 @@ add_ten:
 <div style="columns: 3;column-gap: 20px;column-rule-color: green;column-rule-style: solid;">
   <div style="break-inside: avoid">
     Rust 源码
-    <pre>pub fn a(x: &mut i32) {
-    *x = 0;
+    <pre>pub fn a(x: &AtomicI32) {
+    x.store(0, Relaxed);
 }</pre>
   </div>
   <div style="break-inside: avoid">
@@ -166,14 +166,14 @@ add_ten:
   <div style="break-inside: avoid">
     编译的 ARM64
     <pre>a:
-    mov dword ptr [rdi], 0
+    str wzr, [x0]
     ret</pre>
   </div>
 </div>
 
-或许令人惊讶的是，它的汇编与非原子版本完全相同。事实证明，mov 和 str 指令已经是原子的。它们要么发生，要么它们完全不会发生。显然，在 `&mut i32` 和 `&i32` 之间的任何差异仅对编译器检查和优化有关，但对于处理器是没有意外的——至少对于这两种架构上的 relaxed store 操作。
+或许令人惊讶的是，它的汇编与非原子版本完全相同。事实证明，mov 和 str 指令已经是原子的。它们要么发生，要么它们完全不会发生。显然，在 `&mut i32` 和 `&AtomicI32` 之间的任何差异仅对编译器检查和优化有关，但对于处理器是没有意外的——至少对于这两种架构上的 relaxed store 操作。
 
-当我们查看 relaxed store 操作时，也是相同的：
+当我们查看 relaxed load 操作时，也是相同的：
 
 <div style="columns: 3;column-gap: 20px;column-rule-color: green;column-rule-style: solid;">
   <div style="break-inside: avoid">
@@ -197,7 +197,7 @@ add_ten:
   <div style="break-inside: avoid">
     编译的 ARM64
     <pre>a:
-    mov eax, dword ptr [rdi]
+    ldr w0, [x0]
     ret</pre>
     <pre>a:
     ldr w0, [x0]
@@ -281,7 +281,7 @@ lock 前缀只能应用于非常有限数量的指令，包括 add、sub、and�
   <div style="break-inside: avoid">
     Rust 源码
     <pre>pub fn a(x: &AtomicI32) -> i32 {
-    x.fetch_add(10, Relaxed);
+    x.fetch_add(10, Relaxed)
 }</pre>
   </div>
   <div style="break-inside: avoid">
@@ -305,7 +305,7 @@ lock 前缀只能应用于非常有限数量的指令，包括 add、sub、and�
 
 （<a href="https://marabos.nl/atomics/hardware.html#x86-cas" target="_blank">英文版本</a>）
 
-在[第二章“比较并交换操作”](./2_Atomics.md#比较并交换操作)中，我们看到任何原子「获取并修改」操作都可以实现为一个「比较并交换」循环。对于由单个 x86-63 指令表示的操作，编译器可以使用这种方式，因为该架构确实包含一个（lock 前缀）的 cmpxcchg（比较并交换）指令。
+在[第二章“比较并交换操作”](./2_Atomics.md#比较并交换操作)中，我们看到任何原子「获取并修改」操作都可以实现为一个「比较并交换」循环。对于由单个 x86-64 指令表示的操作，编译器可以使用这种方式，因为该架构确实包含一个（lock 前缀）的 cmpxcchg（比较并交换）指令。
 
 我们可以通过将最后一个示例从 fetch_add 更改为 fetch_or 来在操作中看到这一点：
 
@@ -774,7 +774,7 @@ acquire 操作不能与随后的任意内存操作重排，而 release 操作不
 
 （<a href="https://marabos.nl/atomics/hardware.html#x86-64-strongly-ordered" target="_blank">英文版本</a>）
 
-在 x86-64 处理器上，load 操作将从不随后的内存操作之后发生。类似的，该架构也不允许 store 操作在之前的内存操作之前发生。你可能在 x86-64 上看到的唯一一种重新排序是 store 操作被延迟到稍后的 load 操作之后。
+在 x86-64 处理器上，load 操作将从不会在后续的内存操作之后发生。类似的，该架构也不允许 store 操作在之前的内存操作之前发生。你可能在 x86-64 上看到的唯一一种重新排序是 store 操作被延迟到稍后的 load 操作之后。
 
 > 由于 x86-64 架构的重排序限制，它通常被描述为强排序架构，尽管有些人更愿意保留这个这个术语描述所有保留内存操作排序的架构。
 
