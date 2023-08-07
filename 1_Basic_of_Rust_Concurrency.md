@@ -703,7 +703,7 @@ fn main() {
 
 有了这些变化，这个程序大约仅需要 1s，因为 10 个线程现在可以同时执行 1s 的睡眠。这表明了 mutex 锁定时间保持尽可能短的重要性。将 mutex 锁定时间超过必要时间可能会完全抵消并行带来的好处，实际上会强制所有操作按顺序执行。
 
-### 锁中毒（posion）
+### 锁中毒（poison）
 
 （<a href="https://marabos.nl/atomics/basics.html#lock-poisoning" target="_blank">英文版本</a>）
 

@@ -557,7 +557,7 @@ unsafe impl<T: Sync + Send> Send for Weak<T> {}
 unsafe impl<T: Sync + Send> Sync for Weak<T> {}
 ```
 
-因为我们正在优化我们的实现，我们也能通过使用 `std::mem::ManyallyDrop<T>` 来稍微减小 `ArcData<T>` 的大小。我们使用 `Option<T>` 是为了能够在丢弃数据时，将 `Some(T)` 替换为 None，但实际上我们并不需要单独的 None 状态去告诉我们数据消失了，因为 `Arc<T>` 的存在或者缺失已经告诉我们这一点。`ManyallyDrop<T>` 占用了与 T 相同的数量的空间，但是这允许我们任意时刻通过不安全地调用 `ManuallyDrop::drop()` 来手动丢弃 T：
+因为我们正在优化我们的实现，我们也能通过使用 `std::mem::ManuallyDrop<T>` 来稍微减小 `ArcData<T>` 的大小。我们使用 `Option<T>` 是为了能够在丢弃数据时，将 `Some(T)` 替换为 None，但实际上我们并不需要单独的 None 状态去告诉我们数据消失了，因为 `Arc<T>` 的存在或者缺失已经告诉我们这一点。`ManuallyDrop<T>` 占用了与 T 相同的数量的空间，但是这允许我们任意时刻通过不安全地调用 `ManuallyDrop::drop()` 来手动丢弃 T：
 
 ```rust
 use std::mem::ManuallyDrop;
