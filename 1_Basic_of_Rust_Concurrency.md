@@ -485,7 +485,7 @@ fn f(v: &Cell<Vec<i32>>) {
 
 （<a href="https://marabos.nl/atomics/basics.html#refcell" target="_blank">英文版本</a>）
 
-与常规的 Cell 不同的是，`std::cell::RefCell` 允许你以很小的运行时花费，去借用它的内容。`RefCell<T>` 不仅持有 T，同时也持跟踪任何未解除的借用。如果你尝试在已可变借用时尝试借用它（或反之亦然），它会引发 panic，以避免出现未定义行为。就像 Cell，RefCell 只能在单个线程中使用。
+与常规的 Cell 不同的是，`std::cell::RefCell` 允许你以很小的运行时花费，去借用它的内容。`RefCell<T>` 不仅持有 T，同时也持跟踪任何未解除的借用。在已经存在可变借用的情况下， 如果你尝试借用它（反之亦然），会引发 panic，以避免出现未定义行为。就像 Cell，RefCell 只能在单个线程中使用。
 
 借用 RefCell 的内容通过调用 `borrow` 或者 `borrow_mut` 完成：
 
