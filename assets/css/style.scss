@@ -9,7 +9,7 @@
   --light-color-a: #6ca586;
   --light-color-a-hover: #046960;
   --light-bg-code: rgba(69, 132, 161, 0.85);
-  --light-bg-pre: rgb(240, 236, 224);
+  --light-bg-pre: rgb(254, 246, 229);
   --light-color-h: #402e52;
 
   --dark-color-theme: var(--light-bg-theme);
@@ -59,16 +59,11 @@ a:hover {
     color:rgb(101, 123, 131);
   }
 
-  .k,
-  .kv,
-  .o {
+  .k, .kv, .o {
     color: rgb(133, 153, 0);
   }
     
-  .nd,
-  .nn,
-  .nf,
-  .nb {
+  .nd, .nn, .nf, .nb, .py {
     color: rgb(38, 139, 210);
   }
     
