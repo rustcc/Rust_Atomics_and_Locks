@@ -26,12 +26,12 @@
   * 用于 Channel 的情况，[#](./5_Building_Our_Own_Channels.md#index-Arc-usingforchannelstate)
   * weak 指针，[#](./6_Building_Our_Own_Arc.md#weak-指针)
     * 性能开销，[#](./6_Building_Our_Own_Arc.md#index-Arc-weakpointers-performancecost)
-* arguments，consuming，#
-* ARM64 (processor architecture)，#
-  * aarch64-unknown-linux-musl target，#
-  * other-multi-copy atomic，#
-  * weakly ordered，#
-* ARM64 instructions
+* arguments，consuming，[#](./5_Building_Our_Own_Channels.md#index-argumentsconsuming)
+* ARM64（处理器架构），[#](./7_Understanding_the_Processor.md#index-ARM64processorarchitecture)
+  * aarch64-unknown-linux-musl target，[#](./7_Understanding_the_Processor.md#index-ARM64processorarchitecture-aarch64-unknown-linux-musltarget)
+  * other-multi-copy atomic，[#](./7_Understanding_the_Processor.md#index-ARM64processorarchitecture-other-multi-copyatomic)
+  * weakly ordered，[#](./7_Understanding_the_Processor.md#arm64弱排序)
+* ARM64 指令
   * add，#
   * ARMv8.1 atomic instructions，#，#
   * b.ne (branch if not equal)，#
@@ -898,7 +898,8 @@
 | mutex                | 互斥锁         | 1、2、3、4、8、9    |
 | mutation             | 可变性         | 1、2、4、6、8       |
 | notify               | 通知           | 1、4、5、8、9       |
-| notify_all           | 通知所有       | 9                   |
+| notify_all           | notify all       | 9                   |
+| notify_one           | notify one       | 9                   |
 | park/block           | 阻塞           | all                 |
 | pipeline             | 流水线         | 7                   |
 | reader-writer lock   | 读写锁         | 1、3、4、8、9       |

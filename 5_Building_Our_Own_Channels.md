@@ -358,6 +358,7 @@ impl&lt;T&gt; Drop for Channel&lt;T&gt; {
 
 让我们来看看调用 send 或 receive 不止一次的问题。
 
+<a class="indexterm" id="index-argumentsconsuming"></a>
 为了防止函数被多次调用，我们可以让它*按值*接受参数，对于非 `Copy` 类型，这将消耗对象。对象被消耗或移动后，它会从调用者那里消失，防止它再次被使用。
 
 通过将调用 send 或 receive 表示的能力作为单独的（非 `Copy`）类型，并在执行操作时消费对象，我们可以确保每个操作只能发生一次。
