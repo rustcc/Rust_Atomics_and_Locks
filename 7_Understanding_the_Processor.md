@@ -14,6 +14,7 @@
 
 * *ARM64*：
 
+  <a class="indexterm" id="index-ARM64processorarchitecture"></a>
   ARM 架构的 64 位版本用于几乎所有的现代移动设备、高性能的嵌入式系统、现代化的笔记本电脑和台式机中。它也被称为 AArch64，并被被引入作为 ARMv8 的一部分。ARM 的早期版本（32 位）在很多方面也是类似地，广泛地使用在各种应用中。可以想象在各种嵌入式系统中，从汽车到电子 COVID 测试，这些流行的微控制器都是基于 ARMv6 和 ARMv7。
 
 这两种架构在许多方面都是不同的。最重要的是，他们以不同的方式去实现原子化。理解这两种架构中原子化如何工作的，将会给我们一些更加普遍的理解，并且这些也可以适用于许多其他的处理器架构。
@@ -44,7 +45,6 @@ cmp y, 10   // 比较寄存器 y 和 10
 jne -5      // 如果不相等，向前跳转五条指令
 str 1234, x // 将寄存器 x 的值存储到内存地址 1234</pre>
 
-
   <p>这个示例中，x 和 y 是寄存器（<code>register</code>）。寄存器是处理器的一部分，不属于主内存，通常保存单个数值或者内存地址。在 64 位的架构中，它们一般是 64 位的大小。在不同的架构中，寄存器的个数可能是不一样的，但通常个数也是非常有限的。寄存器基本用于计算过程中的临时存储，是将数据写回内存前存放中间结果的地方。</p>
 
   <p>对于特定内存地址的常量，例如上面示例中的 -5 和 1234，经常是以人类更容易阅读的<i>标签</i>来代替。在将汇编转换成机器码的时候，汇编器会自动将他们替换为实际的地址。</p>
@@ -74,7 +74,7 @@ str 1234, x // 将寄存器 x 的值存储到内存地址 1234</pre>
 
 对于一些相对比较小的代码片段，最简单最推荐的方式是使用 web 服务，比如特别棒的 [Compiler Explorer by Matt Godbolt](https://godbolt.org/)。这个网站上可以使用包含 Rust 在内的多种语言编写代码，并且很直观地可以看到使用选择的编译器版本所产生的汇编代码。该网站甚至使用颜色展示出哪一行 Rust 代码对应哪一行汇编代码，即使是代码被优化过，这种对应关系仍然存在。
 
-由于我们想要观察在不同处理器架构下的汇编代码，因此需要指定 Rust 编译器想要编译的目标架构。我们将使用 x86-64 的 `x86_64-unknown-linux-musl` 和 ARM64 的 `aarch64-unknown-linux-musl`。这两个在网站 Compiler Explorer 上是直接被支持的。如果你想要在本地编译，比如使用上面提到的 `cargo-show-asm` 或者其他的方式，你必须确保在目标机器上，已经安装了 Rust 标准库，这些标准库通常使用 `rustup` 的 target 进行添加。
+由于我们想要观察在不同处理器架构下的汇编代码，因此需要指定 Rust 编译器想要编译的目标架构。我们将使用 x86-64 的 `x86_64-unknown-linux-musl` 和 ARM64 的 `aarch64-unknown-linux-musl`。这两个在网站 Compiler Explorer 上是直接被支持的。<a class="indexterm" id="index-ARM64processorarchitecture-aarch64-unknown-linux-musltarget"></a>如果你想要在本地编译，比如使用上面提到的 `cargo-show-asm` 或者其他的方式，你必须确保在目标机器上，已经安装了 Rust 标准库，这些标准库通常使用 `rustup` 的 target 进行添加。
 
 在任何情况下，使用编译器标识 `--target` 来选择编译的目标机器架构，比如 `--target=aarch64-unknown-linux-musl`。如果你不指定任何目标架构，编译器将会基于你当前的平台进行自动选择。（在网站 Compiler Explorer 的例子中，机器平台是这个网站所在的服务器，当前是 `x86_64-unknown-linux-gnu`）。
 
@@ -766,7 +766,7 @@ acquire 操作不能与随后的任意内存操作重排，而 release 操作不
 
   <p>我们在<a href="./3_Memory_Ordering.html">第 3 章</a>中讨论的理论内存模型为此类处理器架构留出了空间，因为它不要求除顺序一致的原子操作之外的任何操作具有全局一致的顺序。</p>
 
-  <p>我们在本章中聚焦的架构（x86-64 和 ARM64）是“other-multi-copy atomic”，这意味着一旦写操作对任何核可见，它们就同时对所有核可见。对于其他“other-multi-copy atomic”架构，内存排序只是指令重排序的问题。</p>
+  <p>我们在本章中聚焦的架构（x86-64 和 ARM64）是“other-multi-copy atomic”，这意味着一旦写操作对任何核可见，它们就同时对所有核可见。对于其他“other-multi-copy atomic”架构，内存排序只是指令重排序的问题。<a class="indexterm" id="index-ARM64processorarchitecture-other-multi-copyatomic"></a></p>
 </div>
 
 一些架构（例如 ARM64）被称为*弱排序*，因为它们允许处理器自由地重排任意的内存操作。另一方面，*强排序*架构（例如 x86-64）对哪些内存操作可以排序是非常严格的。
