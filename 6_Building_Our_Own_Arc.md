@@ -87,11 +87,13 @@ impl<T> Deref for Arc<T> {
 接下来：实现 Clone。在**增加**引用计数后，克隆的 Arc 将使用相同的指针：
 
 ```rust
-impl<T> Deref for Arc<T> {
-    type Target = T;
-
-    fn deref(&self) -> &T {
-        &self.data().data
+impl<T> Clone for Arc<T> {
+    fn clone(&self) -> Self {
+        // TODO: Handle overflows.
+        self.data().ref_count.fetch_add(1, Relaxed);
+        Arc {
+            ptr: self.ptr,
+        }
     }
 }
 ```
